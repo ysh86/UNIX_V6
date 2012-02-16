@@ -76,7 +76,7 @@ int *ip;
 
 	rip = ip;
 	dev = rip->i_addr[0];
-	maj = rip->i_addr[0].d_major;
+	maj = GET_MAJOR(rip->i_addr[0]);
 	if(rip->i_count <= 1)
 	switch(rip->i_mode&IFMT) {
 
@@ -105,7 +105,7 @@ int *ip;
 
 	rip = ip;
 	dev = rip->i_addr[0];
-	maj = rip->i_addr[0].d_major;
+	maj = GET_MAJOR(rip->i_addr[0]);
 	switch(rip->i_mode&IFMT) {
 
 	case IFCHR:

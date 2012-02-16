@@ -16,7 +16,7 @@
 getswit()
 {
 
-	u.u_ar0[R0] = SW->integ;
+	u.u_ar0[R0] = *SW;
 }
 
 gtime()
@@ -40,8 +40,8 @@ setuid()
 {
 	register uid;
 
-	uid = u.u_ar0[R0].lobyte;
-	if(u.u_ruid == uid.lobyte || suser()) {
+	uid = GET_LO(u.u_ar0[R0]);
+	if(u.u_ruid == GET_LO(uid) || suser()) {
 		u.u_uid = uid;
 		u.u_procp->p_uid = uid;
 		u.u_ruid = uid;
@@ -51,16 +51,16 @@ setuid()
 getuid()
 {
 
-	u.u_ar0[R0].lobyte = u.u_ruid;
-	u.u_ar0[R0].hibyte = u.u_uid;
+	SET_LO(u.u_ar0[R0], u.u_ruid);
+	SET_HI(u.u_ar0[R0], u.u_uid);
 }
 
 setgid()
 {
 	register gid;
 
-	gid = u.u_ar0[R0].lobyte;
-	if(u.u_rgid == gid.lobyte || suser()) {
+	gid = GET_LO(u.u_ar0[R0]);
+	if(u.u_rgid == GET_LO(gid>) || suser()) {
 		u.u_gid = gid;
 		u.u_rgid = gid;
 	}
@@ -69,8 +69,8 @@ setgid()
 getgid()
 {
 
-	u.u_ar0[R0].lobyte = u.u_rgid;
-	u.u_ar0[R0].hibyte = u.u_gid;
+	SET_LO(u.u_ar0[R0], u.u_rgid);
+	SET_HI(u.u_ar0[R0], u.u_gid);
 }
 
 getpid()
@@ -168,8 +168,8 @@ chown()
 
 	if (!suser() || (ip = owner()) == NULL)
 		return;
-	ip->i_uid = u.u_arg[1].lobyte;
-	ip->i_gid = u.u_arg[1].hibyte;
+	ip->i_uid = GET_LO(u.u_arg[1]);
+	ip->i_gid = GET_HI(u.u_arg[1]);
 	ip->i_flag =| IUPD;
 	iput(ip);
 }

@@ -22,11 +22,11 @@ int	icode[]
 	0000777,	/* br . */
 	0000014,	/* initp: init; 0 */
 	0000000,
-	0062457,	/* init: </etc/init\0> */
-	0061564,
-	0064457,
-	0064556,
-	0000164,
+	0062457,	/* 'e'  '/' */ /* init: </etc/init\0> */
+	0061564,	/* 'c'  't' */
+	0064457,	/* 'i'  '/' */
+	0064556,	/* 'i'  'n' */
+	0000164,	/* '\0' 't' */
 };
 
 /*
@@ -57,9 +57,9 @@ main()
 
 	updlock = 0;
 	i = *ka6 + USIZE;
-	UISD->r[0] = 077406;
+	UISD[0] = 077406;
 	for(;;) {
-		UISA->r[0] = i;
+		UISA[0] = i;
 		if(fuibyte(0) < 0)
 			break;
 		clearseg(i);
@@ -69,8 +69,8 @@ main()
 	}
 	if(cputype == 70)
 	for(i=0; i<62; i=+2) {
-		UBMAP->r[i] = i<<12;
-		UBMAP->r[i+1] = 0;
+		UBMAP[i] = i<<12;
+		UBMAP[i+1] = 0;
 	}
 	printf("mem = %l\n", maxmem*5/16);
 	maxmem = min(maxmem, MAXMEM);
@@ -80,8 +80,8 @@ main()
 	 * determine clock
 	 */
 
-	UISA->r[7] = ka6[1]; /* io segment */
-	UISD->r[7] = 077406;
+	UISA[7] = ka6[1]; /* io segment */
+	UISD[7] = 077406;
 	lks = CLOCK1;
 	if(fuiword(lks) == -1) {
 		lks = CLOCK2;
@@ -143,22 +143,22 @@ sureg()
 
 	a = u.u_procp->p_addr;
 	up = &u.u_uisa[16];
-	rp = &UISA->r[16];
+	rp = &UISA[16];
 	if(cputype == 40) {
 		up =- 8;
 		rp =- 8;
 	}
-	while(rp > &UISA->r[0])
+	while(rp > &UISA[0])
 		*--rp = *--up + a;
 	if((up=u.u_procp->p_textp) != NULL)
 		a =- up->x_caddr;
 	up = &u.u_uisd[16];
-	rp = &UISD->r[16];
+	rp = &UISD[16];
 	if(cputype == 40) {
 		up =- 8;
 		rp =- 8;
 	}
-	while(rp > &UISD->r[0]) {
+	while(rp > &UISD[0]) {
 		*--rp = *--up;
 		if((*rp & WO) == 0)
 			rp[(UISA-UISD)/2] =- a;

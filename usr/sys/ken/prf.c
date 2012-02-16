@@ -11,7 +11,7 @@
  * Address and structure of the
  * KL-11 console device registers.
  */
-struct
+struct kl_11_regs
 {
 	int	rsr;
 	int	rbr;
@@ -86,22 +86,22 @@ putchar(c)
 	register rc, s;
 
 	rc = c;
-	if(SW->integ == 0)
+	if(*SW == 0)
 		return;
-	while((KL->xsr&0200) == 0)
+	while(((struct kl_11_regs*)KL->xsr&0200) == 0)
 		;
 	if(rc == 0)
 		return;
-	s = KL->xsr;
-	KL->xsr = 0;
-	KL->xbr = rc;
+	s = (struct kl_11_regs*)KL->xsr;
+	(struct kl_11_regs*)KL->xsr = 0;
+	(struct kl_11_regs*)KL->xbr = rc;
 	if(rc == '\n') {
 		putchar('\r');
 		putchar(0177);
 		putchar(0177);
 	}
 	putchar(0);
-	KL->xsr = s;
+	(struct kl_11_regs*)KL->xsr = s;
 }
 
 /*
@@ -126,10 +126,10 @@ char *s;
  * x and y are the major and minor parts of
  * the device argument.
  */
-prdev(str, dev)
+void prdev(char *str, int dev)
 {
 
-	printf("%s on dev %l/%l\n", str, dev.d_major, dev.d_minor);
+	printf("%s on dev %l/%l\n", str, GET_MAJOR(dev), GET_MINOR(dev));
 }
 
 /*

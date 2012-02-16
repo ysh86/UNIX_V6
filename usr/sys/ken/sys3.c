@@ -110,7 +110,7 @@ smount()
 	}
 	if(smp == NULL)
 		goto out;
-	(*bdevsw[d.d_major].d_open)(d, !u.u_arg[2]);
+	(*bdevsw[GET_MAJOR(d)].d_open)(d, !u.u_arg[2]);
 	if(u.u_error)
 		goto out;
 	mp = bread(d, 1);
@@ -162,7 +162,7 @@ found:
 			u.u_error = EBUSY;
 			return;
 		}
-	(*bdevsw[d.d_major].d_close)(d, 0);
+	(*bdevsw[GET_MAJOR(d)].d_close)(d, 0);
 	ip = mp->m_inodp;
 	ip->i_flag =& ~IMOUNT;
 	iput(ip);
@@ -187,7 +187,7 @@ getmdev()
 	if((ip->i_mode&IFMT) != IFBLK)
 		u.u_error = ENOTBLK;
 	d = ip->i_addr[0];
-	if(ip->i_addr[0].d_major >= nblkdev)
+	if(GET_MAJOR(ip->i_addr[0]) >= nblkdev)
 		u.u_error = ENXIO;
 	iput(ip);
 	return(d);

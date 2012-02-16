@@ -69,23 +69,31 @@
  * structure to access an
  * integer in bytes
  */
+/*
 struct
 {
 	char	lobyte;
 	char	hibyte;
 };
+ */
+#define GET_LO(__data__) ((char)(((__data__)>>8)&0xFF))
+#define GET_HI(__data__) ((char)( (__data__)    &0xFF))
+#define SET_LO(__dst__,__src__) ((__dst__) = ((__dst__)&0x00FF) | (((__src__)<<8)&0xFF00))
+#define SET_HI(__dst__,__src__) ((__dst__) = ((__dst__)&0xFF00) | ( (__src__)    &0x00FF))
 
 /*
  * structure to access an integer
  */
+/*
 struct
 {
 	int	integ;
 };
+ */
 
 /*
  * Certain processor registers
  */
-#define PS	0177776
-#define KL	0177560
-#define SW	0177570
+int *PS = (int*)(0177776);
+int *KL = (int*)(0177560);
+int *SW = (int*)(0177570);

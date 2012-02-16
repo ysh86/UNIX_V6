@@ -51,4 +51,4 @@ int	swplo;			/* block number of swap space */
 int	nswap;			/* size of swap space */
 int	updlock;		/* lock for sync */
 int	rablock;		/* block to be read ahead */
-char	regloc[];		/* locs. of saved user registers (trap.c) */
+extern char	*regloc;		/* locs. of saved user registers (trap.c) */
