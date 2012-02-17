@@ -37,8 +37,7 @@ char	*panicstr;
  * suspended.
  * Printf should not be used for chit-chat.
  */
-printf(fmt,x1,x2,x3,x4,x5,x6,x7,x8,x9,xa,xb,xc)
-char fmt[];
+void printf(char fmt[],x1,x2,x3,x4,x5,x6,x7,x8,x9,xa,xb,xc)
 {
 	register char *s;
 	register *adx, c;

@@ -30,6 +30,7 @@ void geterror(struct buf *abp);
 
 /* ken/prf.c */
 void panic(char *s);
+void printf(char fmt[],int x1,int x2,int x3,int x4,int x5,int x6,int x7,int x8,int x9,int xa,int xb,int xc);
 
 /* ken/subr.c */
 void bcopy(void *from, void *to, int count);
@@ -57,3 +58,11 @@ void prele(struct inode *ip);
 /* ken/sig.c */
 char issig();
 char psig();
+
+/* ken/fio.c */
+void closei(struct inode *ip, char rw);
+int suser();
+
+/* ken/nami.c */
+struct inode *namei(int (*func)(), int flag);
+int uchar();

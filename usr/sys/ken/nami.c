@@ -16,8 +16,7 @@
  *	1 if name is to be created
  *	2 if name is to be deleted
  */
-namei(func, flag)
-int (*func)();
+struct inode *namei(int (*func)(), int flag)
 {
 	register struct inode *dp;
 	register c;
@@ -189,7 +188,7 @@ schar()
  * Return the next character from the
  * user string pointed at by dirp.
  */
-uchar()
+int uchar()
 {
 	register c;
 
