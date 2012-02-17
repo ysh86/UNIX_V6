@@ -4,6 +4,8 @@ void display();
 void spl1();
 void spl5();
 void spl7();
+int ldiv(int a, int b);
+int lrem(int a, int b);
 
 /* dmr/bio.c */
 struct buf *bread(int dev, int blkno);
@@ -38,6 +40,9 @@ void bcopy(void *from, void *to, int count);
 /* ken/alloc.c */
 struct filsys *getfs(int dev);
 int badblock(struct filsys *afp, int abn, int dev);
+struct inode *ialloc(int dev);
+void ifree(int dev, int ino);
+void free(int dev, int bno);
 
 /* ken/slp.c */
 void sleep(int chan, char pri);
@@ -51,6 +56,8 @@ void prdev(char *str, int dev);
 struct inode *iget(int dev, int ino);
 void iput(struct inode *p);
 void iupdat(struct inode *p, int *tm);
+void itrunc(int *ip);
+void wdir(struct inode *ip);
 
 /* ken/pipe.c */
 void prele(struct inode *ip);
@@ -66,3 +73,6 @@ int suser();
 /* ken/nami.c */
 struct inode *namei(int (*func)(), int flag);
 int uchar();
+
+/* ken/rdwri.c */
+void writei(struct inode *aip);
