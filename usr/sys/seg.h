@@ -14,12 +14,10 @@ int *UDSA = (int*)(0177660);		/* first user D-space address register */
  * structure used to address
  * a sequence of integers.
  */
-/*
-struct
+/* struct
 {
 	int	r[];
-};
- */
+}; */
 int	*ka6;		/* 11/40 KISA6; 11/45 KDSA6 */
 
 /*

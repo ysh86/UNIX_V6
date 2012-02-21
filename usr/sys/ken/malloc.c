@@ -13,11 +13,11 @@
  * the list is terminated with the
  * first zero count.
  */
-struct map
+/* struct map
 {
 	char *m_size;
 	char *m_addr;
-};
+}; */
 
 /*
  * Allocate size units from the given

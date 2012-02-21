@@ -100,7 +100,7 @@ out:
 	if(++lbolt >= HZ) {
 		if((ps&0340) != 0)
 			return;
-		lbolt =- HZ;
+		lbolt -= HZ;
 		if(++time[1] == 0)
 			++time[0];
 		spl1();
@@ -115,7 +115,7 @@ out:
 			if(pp->p_time != 127)
 				pp->p_time++;
 			if((pp->p_cpu & 0377) > SCHMAG)
-				pp->p_cpu =- SCHMAG; else
+				pp->p_cpu -= SCHMAG; else
 				pp->p_cpu = 0;
 			if(pp->p_pri > PUSER)
 				setpri(pp);
@@ -155,10 +155,10 @@ void timeout(int (*fun)(), int arg, int tim)
 	p1 = &callout[0];
 	spl7();
 	while(p1->c_func != 0 && p1->c_time <= t) {
-		t =- p1->c_time;
+		t -= p1->c_time;
 		p1++;
 	}
-	p1->c_time =- t;
+	p1->c_time -= t;
 	p2 = p1;
 	while(p2->c_func != 0)
 		p2++;

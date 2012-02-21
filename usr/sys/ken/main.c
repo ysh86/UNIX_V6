@@ -7,6 +7,8 @@
 #include "../inode.h"
 #include "../seg.h"
 
+#include "misc.h"
+
 #define	CLOCK1	0177546
 #define	CLOCK2	0172540
 /*
@@ -14,7 +16,7 @@
  * program executed in user mode
  * to bring up the system.
  */
-int	icode[]
+int	icode[] =
 {
 	0104413,	/* sys exec; init; initp */
 	0000014,
@@ -46,10 +48,11 @@ int	icode[]
  * loop at loc 6 in user mode -- /etc/init
  *	cannot be executed.
  */
-main()
+void main()
 {
-	extern schar;
-	register i, *p;
+	/* extern schar; */
+	register int i;
+	/* register  *p; */
 
 	/*
 	 * zero and free all of core
@@ -64,17 +67,17 @@ main()
 			break;
 		clearseg(i);
 		maxmem++;
-		mfree(coremap, 1, i);
+		mfree((struct map *)coremap, 1, i);
 		i++;
 	}
 	if(cputype == 70)
-	for(i=0; i<62; i=+2) {
+	for(i=0; i<62; i+=2) {
 		UBMAP[i] = i<<12;
 		UBMAP[i+1] = 0;
 	}
-	printf("mem = %l\n", maxmem*5/16);
+	printf("mem = %l\n", maxmem*5/16,0,0,0,0,0,0,0,0,0,0,0);
 	maxmem = min(maxmem, MAXMEM);
-	mfree(swapmap, nswap, swplo);
+	mfree((struct map *)swapmap, nswap, swplo);
 
 	/*
 	 * determine clock
@@ -82,9 +85,9 @@ main()
 
 	UISA[7] = ka6[1]; /* io segment */
 	UISD[7] = 077406;
-	lks = CLOCK1;
+	lks = (int *)CLOCK1;
 	if(fuiword(lks) == -1) {
-		lks = CLOCK2;
+		lks = (int *)CLOCK2;
 		if(fuiword(lks) == -1)
 			panic("no clock");
 	}
@@ -96,8 +99,8 @@ main()
 	proc[0].p_addr = *ka6;
 	proc[0].p_size = USIZE;
 	proc[0].p_stat = SRUN;
-	proc[0].p_flag =| SLOAD|SSYS;
-	u.u_procp = &proc[0];
+	proc[0].p_flag |= SLOAD|SSYS;
+	u.u_procp = (int)&proc[0];
 
 	/*
 	 * set up 'known' i-nodes
@@ -108,9 +111,9 @@ main()
 	binit();
 	iinit();
 	rootdir = iget(rootdev, ROOTINO);
-	rootdir->i_flag =& ~ILOCK;
-	u.u_cdir = iget(rootdev, ROOTINO);
-	u.u_cdir->i_flag =& ~ILOCK;
+	rootdir->i_flag &= ~ILOCK;
+	u.u_cdir = (int *)iget(rootdev, ROOTINO);
+	((struct inode *)u.u_cdir)->i_flag &= ~ILOCK;
 
 	/*
 	 * make init process
@@ -137,31 +140,32 @@ main()
  * The software registers must have
  * been setup prior by estabur.
  */
-sureg()
+void sureg()
 {
-	register *up, *rp, a;
+	register int *up, *rp;
+	register int a;
 
-	a = u.u_procp->p_addr;
+	a = ((struct proc *)u.u_procp)->p_addr;
 	up = &u.u_uisa[16];
 	rp = &UISA[16];
 	if(cputype == 40) {
-		up =- 8;
-		rp =- 8;
+		up -= 8;
+		rp -= 8;
 	}
 	while(rp > &UISA[0])
 		*--rp = *--up + a;
-	if((up=u.u_procp->p_textp) != NULL)
-		a =- up->x_caddr;
+	if((up=((struct proc *)u.u_procp)->p_textp) != NULL)
+		a -= ((struct text *)up)->x_caddr;
 	up = &u.u_uisd[16];
 	rp = &UISD[16];
 	if(cputype == 40) {
-		up =- 8;
-		rp =- 8;
+		up -= 8;
+		rp -= 8;
 	}
 	while(rp > &UISD[0]) {
 		*--rp = *--up;
 		if((*rp & WO) == 0)
-			rp[(UISA-UISD)/2] =- a;
+			rp[(UISA-UISD)/2] -= a;
 	}
 }
 
@@ -174,9 +178,10 @@ sureg()
  * text and data+stack segments are to
  * be separated.
  */
-estabur(nt, nd, ns, sep)
+int estabur(int nt, int nd, int ns, int sep)
 {
-	register a, *ap, *dp;
+	register int a;
+	register int *ap, *dp;
 
 	if(sep) {
 		if(cputype == 40)
@@ -194,8 +199,8 @@ estabur(nt, nd, ns, sep)
 	while(nt >= 128) {
 		*dp++ = (127<<8) | RO;
 		*ap++ = a;
-		a =+ 128;
-		nt =- 128;
+		a += 128;
+		nt -= 128;
 	}
 	if(nt) {
 		*dp++ = ((nt-1)<<8) | RO;
@@ -210,13 +215,13 @@ estabur(nt, nd, ns, sep)
 	while(nd >= 128) {
 		*dp++ = (127<<8) | RW;
 		*ap++ = a;
-		a =+ 128;
-		nd =- 128;
+		a += 128;
+		nd -= 128;
 	}
 	if(nd) {
 		*dp++ = ((nd-1)<<8) | RW;
 		*ap++ = a;
-		a =+ nd;
+		a += nd;
 	}
 	while(ap < &u.u_uisa[8]) {
 		*dp++ = 0;
@@ -227,10 +232,10 @@ estabur(nt, nd, ns, sep)
 		*dp++ = 0;
 		*ap++ = 0;
 	}
-	a =+ ns;
+	a += ns;
 	while(ns >= 128) {
-		a =- 128;
-		ns =- 128;
+		a -= 128;
+		ns -= 128;
 		*--dp = (127<<8) | RW;
 		*--ap = a;
 	}
@@ -259,7 +264,7 @@ err:
 /*
  * Return the arg/128 rounded up.
  */
-nseg(n)
+int nseg(int n)
 {
 
 	return((n+127)>>7);

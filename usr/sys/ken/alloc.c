@@ -199,7 +199,7 @@ loop:
 	for(i=0; i<fp->s_isize; i++) {
 		bp = bread(dev, i+2);
 		intp = (int *)bp->b_addr;
-		for(j=0; j<256; j=+16) {
+		for(j=0; j<256; j+=16) {
 			ino++;
 			if(intp[j] != 0)
 				continue;
