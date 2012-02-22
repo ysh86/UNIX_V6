@@ -10,6 +10,7 @@
 #include "../inode.h"
 #include "../user.h"
 
+#include "../proc.h"
 #include "misc.h"
 
 /*

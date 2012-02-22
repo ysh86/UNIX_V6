@@ -67,7 +67,7 @@ void main()
 			break;
 		clearseg(i);
 		maxmem++;
-		mfree((struct map *)coremap, 1, i);
+		mfree((struct map *)coremap, 1, (char *)i);
 		i++;
 	}
 	if(cputype == 70)
@@ -77,7 +77,7 @@ void main()
 	}
 	printf("mem = %l\n", maxmem*5/16,0,0,0,0,0,0,0,0,0,0,0);
 	maxmem = min(maxmem, MAXMEM);
-	mfree((struct map *)swapmap, nswap, swplo);
+	mfree((struct map *)swapmap, nswap, (char *)swplo);
 
 	/*
 	 * determine clock

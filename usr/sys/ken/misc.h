@@ -107,10 +107,10 @@ int min(int a, int b);
 /* ken/malloc.c */
 struct map
 {
-	char *m_size;
+	int m_size;
 	char *m_addr;
 };
-void mfree(struct map *mp, int size, int aa);
+void mfree(struct map *mp, int size, char *aa);
 
 /* ken/main.c */
 int estabur(int nt, int nd, int ns, int sep);
