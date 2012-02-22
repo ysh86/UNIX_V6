@@ -24,16 +24,16 @@ struct user
 	char	u_rgid;			/* real group id */
 	int	u_procp;		/* pointer to proc structure */
 	char	*u_base;		/* base address for IO */
-	char	*u_count;		/* bytes remaining for IO */
-	char	*u_offset[2];		/* offset in file for IO */
-	int	*u_cdir;		/* pointer to inode of current directory */
+	int	u_count;		/* bytes remaining for IO */
+	int	u_offset[2];		/* offset in file for IO */
+	struct inode	*u_cdir;		/* pointer to inode of current directory */
 	char	u_dbuf[DIRSIZ];		/* current pathname component */
 	char	*u_dirp;		/* current pointer to inode */
 	struct	{			/* current directory entry */
 		int	u_ino;
 		char	u_name[DIRSIZ];
 	} u_dent;
-	int	*u_pdir;		/* inode of parent directory of dirp */
+	struct inode	*u_pdir;		/* inode of parent directory of dirp */
 	int	u_uisa[16];		/* prototype of segmentation addresses */
 	int	u_uisd[16];		/* prototype of segmentation descriptors */
 	int	u_ofile[NOFILE];	/* pointers to file structures of open files */

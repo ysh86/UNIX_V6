@@ -206,7 +206,7 @@ struct inode *maknode(int mode)
 {
 	register struct inode *ip;
 
-	ip = ialloc(((struct inode *)u.u_pdir)->i_dev);
+	ip = ialloc(u.u_pdir->i_dev);
 	if (ip==NULL)
 		return(NULL);
 	ip->i_flag |= IACC|IUPD;
@@ -231,9 +231,9 @@ void wdir(struct inode *ip)
 	cp1 = &u.u_dent.u_name[0];
 	for(cp2 = &u.u_dbuf[0]; cp2 < &u.u_dbuf[DIRSIZ];)
 		*cp1++ = *cp2++;
-	u.u_count = (char *)(DIRSIZ+2);
+	u.u_count = DIRSIZ+2;
 	u.u_segflg = 1;
 	u.u_base = (char *)&u.u_dent;
-	writei((struct inode *)u.u_pdir);
-	iput((struct inode *)u.u_pdir);
+	writei(u.u_pdir);
+	iput(u.u_pdir);
 }

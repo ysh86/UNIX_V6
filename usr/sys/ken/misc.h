@@ -19,7 +19,8 @@ void spl5();
 void spl7();
 int ldiv(int a, int b);
 int lrem(int a, int b);
-int fuibyte(char a);
+int fuibyte(char *a);
+int fubyte(char *a);
 int fuiword(int *a);
 void clearseg(int a);
 void copyout(int *a, int b, int c);
@@ -57,6 +58,7 @@ void panic(char *s);
 void printf(char fmt[],int x1,int x2,int x3,int x4,int x5,int x6,int x7,int x8,int x9,int xa,int xb,int xc);
 
 /* ken/subr.c */
+int bmap(struct inode *ip, int bn);
 void bcopy(void *from, void *to, int count);
 
 /* ken/alloc.c */
@@ -93,6 +95,7 @@ char issig();
 char psig();
 
 /* ken/fio.c */
+int access(struct inode *aip, int mode);
 void closei(struct inode *ip, char rw);
 int suser();
 

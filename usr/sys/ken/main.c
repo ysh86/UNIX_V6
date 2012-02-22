@@ -112,8 +112,8 @@ void main()
 	iinit();
 	rootdir = iget(rootdev, ROOTINO);
 	rootdir->i_flag &= ~ILOCK;
-	u.u_cdir = (int *)iget(rootdev, ROOTINO);
-	((struct inode *)u.u_cdir)->i_flag &= ~ILOCK;
+	u.u_cdir = iget(rootdev, ROOTINO);
+	u.u_cdir->i_flag &= ~ILOCK;
 
 	/*
 	 * make init process
