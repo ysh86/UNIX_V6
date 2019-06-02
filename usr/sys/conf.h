@@ -3,11 +3,11 @@
  * into major (driver designation) and
  * minor (driver parameter) parts.
  */
-struct
+/* struct
 {
 	char	d_minor;
 	char	d_major;
-};
+}; */
 
 /*
  * Declaration of block device
@@ -18,13 +18,13 @@ struct
  * device switches is in the
  * file conf.c.
  */
-struct	bdevsw
+extern struct	bdevsw
 {
 	int	(*d_open)();
 	int	(*d_close)();
 	int	(*d_strategy)();
 	int	*d_tab;
-} bdevsw[];
+} *bdevsw;
 
 /*
  * Nblkdev is the number of entries
@@ -39,14 +39,14 @@ int	nblkdev;
 /*
  * Character device switch.
  */
-struct	cdevsw
+extern struct	cdevsw
 {
 	int	(*d_open)();
 	int	(*d_close)();
 	int	(*d_read)();
 	int	(*d_write)();
 	int	(*d_sgtty)();
-} cdevsw[];
+} *cdevsw;
 
 /*
  * Number of character switch entries.

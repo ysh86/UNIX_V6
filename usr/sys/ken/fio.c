@@ -10,6 +10,9 @@
 #include "../inode.h"
 #include "../reg.h"
 
+#include "../proc.h"
+#include "misc.h"
+
 /*
  * Convert a user supplied
  * file descriptor into a pointer
@@ -17,14 +20,15 @@
  * Only task is to check range
  * of the descriptor.
  */
-getf(f)
+struct file *getf(int f)
 {
-	register *fp, rf;
+	register struct file *fp;
+	register int rf;
 
 	rf = f;
 	if(rf<0 || rf>=NOFILE)
 		goto bad;
-	fp = u.u_ofile[rf];
+	fp = (struct file *)u.u_ofile[rf];
 	if(fp != NULL)
 		return(fp);
 bad:
@@ -40,20 +44,20 @@ bad:
  * Also make sure the pipe protocol
  * does not constipate.
  */
-closef(fp)
-int *fp;
+void closef(struct file *fp)
 {
-	register *rfp, *ip;
+	register struct file *rfp;
+	register struct inode *ip;
 
 	rfp = fp;
 	if(rfp->f_flag&FPIPE) {
-		ip = rfp->f_inode;
-		ip->i_mode =& ~(IREAD|IWRITE);
-		wakeup(ip+1);
-		wakeup(ip+2);
+		ip = (struct inode *)rfp->f_inode;
+		ip->i_mode &= ~(IREAD|IWRITE);
+		wakeup((int)(ip+1));
+		wakeup((int)(ip+2));
 	}
 	if(rfp->f_count <= 1)
-		closei(rfp->f_inode, rfp->f_flag&FWRITE);
+		closei((struct inode *)rfp->f_inode, rfp->f_flag&FWRITE);
 	rfp->f_count--;
 }
 
@@ -68,15 +72,14 @@ int *fp;
  * on every open and only on the last
  * close.
  */
-closei(ip, rw)
-int *ip;
+void closei(struct inode *ip, char rw)
 {
-	register *rip;
-	register dev, maj;
+	register struct inode *rip;
+	register int dev, maj;
 
 	rip = ip;
 	dev = rip->i_addr[0];
-	maj = rip->i_addr[0].d_major;
+	maj = GET_MAJOR(rip->i_addr[0]);
 	if(rip->i_count <= 1)
 	switch(rip->i_mode&IFMT) {
 
@@ -97,15 +100,14 @@ int *ip;
  * Called on all sorts of opens
  * and also on mount.
  */
-openi(ip, rw)
-int *ip;
+void openi(struct inode *ip, char rw)
 {
-	register *rip;
-	register dev, maj;
+	register struct inode *rip;
+	register int dev, maj;
 
 	rip = ip;
 	dev = rip->i_addr[0];
-	maj = rip->i_addr[0].d_major;
+	maj = GET_MAJOR(rip->i_addr[0]);
 	switch(rip->i_mode&IFMT) {
 
 	case IFCHR:
@@ -140,15 +142,15 @@ bad:
  * at least one of the EXEC bits must
  * be on.
  */
-access(aip, mode)
-int *aip;
+int access(struct inode *aip, int mode)
 {
-	register *ip, m;
+	register struct inode *ip;
+	register int m;
 
 	ip = aip;
 	m = mode;
 	if(m == IWRITE) {
-		if(getfs(ip->i_dev)->s_ronly != 0) {
+		if(((struct filsys *)getfs(ip->i_dev))->s_ronly != 0) {
 			u.u_error = EROFS;
 			return(1);
 		}
@@ -164,9 +166,9 @@ int *aip;
 		return(0);
 	}
 	if(u.u_uid != ip->i_uid) {
-		m =>> 3;
+		m >>= 3;
 		if(u.u_gid != ip->i_gid)
-			m =>> 3;
+			m >>= 3;
 	}
 	if((ip->i_mode&m) != 0)
 		return(0);
@@ -184,10 +186,9 @@ bad:
  * If permission is granted,
  * return inode pointer.
  */
-owner()
+struct inode *owner()
 {
 	register struct inode *ip;
-	extern uchar();
 
 	if ((ip = namei(uchar, 0)) == NULL)
 		return(NULL);
@@ -203,7 +204,7 @@ owner()
  * Test if the current user is the
  * super user.
  */
-suser()
+int suser()
 {
 
 	if(u.u_uid == 0)
@@ -215,9 +216,9 @@ suser()
 /*
  * Allocate a user file descriptor.
  */
-ufalloc()
+int ufalloc()
 {
-	register i;
+	register int i;
 
 	for (i=0; i<NOFILE; i++)
 		if (u.u_ofile[i] == NULL) {
@@ -237,22 +238,22 @@ ufalloc()
  * no file -- if there are no available
  * 	file structures.
  */
-falloc()
+struct file *falloc()
 {
 	register struct file *fp;
-	register i;
+	register int i;
 
 	if ((i = ufalloc()) < 0)
 		return(NULL);
 	for (fp = &file[0]; fp < &file[NFILE]; fp++)
 		if (fp->f_count==0) {
-			u.u_ofile[i] = fp;
+			u.u_ofile[i] = (int)fp;
 			fp->f_count++;
 			fp->f_offset[0] = 0;
 			fp->f_offset[1] = 0;
 			return(fp);
 		}
-	printf("no file\n");
+	printf("no file\n",0,0,0,0,0,0,0,0,0,0,0,0);
 	u.u_error = ENFILE;
 	return(NULL);
 }

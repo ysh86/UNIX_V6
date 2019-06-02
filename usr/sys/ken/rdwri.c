@@ -32,7 +32,7 @@ struct inode *aip;
 		return;
 	ip->i_flag =| IACC;
 	if((ip->i_mode&IFMT) == IFCHR) {
-		(*cdevsw[ip->i_addr[0].d_major].d_read)(ip->i_addr[0]);
+		(*cdevsw[GET_MAJOR(ip->i_addr[0])].d_read)(ip->i_addr[0]);
 		return;
 	}
 
@@ -84,7 +84,7 @@ struct inode *aip;
 	ip = aip;
 	ip->i_flag =| IACC|IUPD;
 	if((ip->i_mode&IFMT) == IFCHR) {
-		(*cdevsw[ip->i_addr[0].d_major].d_write)(ip->i_addr[0]);
+		(*cdevsw[GET_MAJOR(ip->i_addr[0])].d_write)(ip->i_addr[0]);
 		return;
 	}
 	if (u.u_count == 0)

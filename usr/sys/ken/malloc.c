@@ -13,11 +13,14 @@
  * the list is terminated with the
  * first zero count.
  */
-struct map
+/* struct map
 {
-	char *m_size;
+	int m_size;
 	char *m_addr;
-};
+}; */
+#include "../param.h"
+#include "../proc.h"
+#include "misc.h"
 
 /*
  * Allocate size units from the given
@@ -25,17 +28,16 @@ struct map
  * space.
  * Algorithm is first fit.
  */
-malloc(mp, size)
-struct map *mp;
+char *malloc(struct map *mp, int size)
 {
-	register int a;
+	register char *a;
 	register struct map *bp;
 
 	for (bp = mp; bp->m_size; bp++) {
 		if (bp->m_size >= size) {
 			a = bp->m_addr;
-			bp->m_addr =+ size;
-			if ((bp->m_size =- size) == 0)
+			bp->m_addr += size;
+			if ((bp->m_size -= size) == 0)
 				do {
 					bp++;
 					(bp-1)->m_addr = bp->m_addr;
@@ -52,19 +54,19 @@ struct map *mp;
  * Sort aa into map and combine on
  * one or both ends if possible.
  */
-mfree(mp, size, aa)
-struct map *mp;
+void mfree(struct map *mp, int size, char *aa)
 {
 	register struct map *bp;
-	register int t;
-	register int a;
+	register char *t;
+	register int tt;
+	register char *a;
 
 	a = aa;
 	for (bp = mp; bp->m_addr<=a && bp->m_size!=0; bp++);
 	if (bp>mp && (bp-1)->m_addr+(bp-1)->m_size == a) {
-		(bp-1)->m_size =+ size;
+		(bp-1)->m_size += size;
 		if (a+size == bp->m_addr) {
-			(bp-1)->m_size =+ bp->m_size;
+			(bp-1)->m_size += bp->m_size;
 			while (bp->m_size) {
 				bp++;
 				(bp-1)->m_addr = bp->m_addr;
@@ -73,15 +75,15 @@ struct map *mp;
 		}
 	} else {
 		if (a+size == bp->m_addr && bp->m_size) {
-			bp->m_addr =- size;
-			bp->m_size =+ size;
+			bp->m_addr -= size;
+			bp->m_size += size;
 		} else if (size) do {
 			t = bp->m_addr;
 			bp->m_addr = a;
 			a = t;
-			t = bp->m_size;
+			tt = bp->m_size;
 			bp->m_size = size;
 			bp++;
-		} while (size = t);
+		} while (size = tt);
 	}
 }

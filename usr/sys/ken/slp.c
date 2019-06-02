@@ -26,7 +26,7 @@ sleep(chan, pri)
 {
 	register *rp, s;
 
-	s = PS->integ;
+	s = *PS;
 	rp = u.u_procp;
 	if(pri >= 0) {
 		if(issig())
@@ -51,7 +51,7 @@ sleep(chan, pri)
 		spl0();
 		swtch();
 	}
-	PS->integ = s;
+	*PS = s;
 	return;
 
 	/*

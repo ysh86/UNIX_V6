@@ -69,23 +69,23 @@
  * structure to access an
  * integer in bytes
  */
-struct
+/* struct
 {
 	char	lobyte;
 	char	hibyte;
-};
+}; */
 
 /*
  * structure to access an integer
  */
-struct
+/* struct
 {
 	int	integ;
-};
+}; */
 
 /*
  * Certain processor registers
  */
-#define PS	0177776
-#define KL	0177560
-#define SW	0177570
+int *PS = (int*)(0177776);
+int *KL = (int*)(0177560);
+int *SW = (int*)(0177570);

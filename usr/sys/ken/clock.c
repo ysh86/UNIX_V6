@@ -4,6 +4,8 @@
 #include "../user.h"
 #include "../proc.h"
 
+#include "misc.h"
+
 #define	UMODE	0170000
 #define	SCHMAG	10
 
@@ -23,7 +25,7 @@
  *	alarm clock signals
  *	jab the scheduler
  */
-clock(dev, sp, r1, nps, r0, pc, ps)
+void clock(int dev, int sp, int r1, int nps, int r0, int pc, int ps)
 {
 	register struct callo *p1, *p2;
 	register struct proc *pp;
@@ -92,41 +94,41 @@ out:
 			incupc(pc, u.u_prof);
 	} else
 		u.u_stime++;
-	pp = u.u_procp;
+	pp = (struct proc *)u.u_procp;
 	if(++pp->p_cpu == 0)
 		pp->p_cpu--;
 	if(++lbolt >= HZ) {
 		if((ps&0340) != 0)
 			return;
-		lbolt =- HZ;
+		lbolt -= HZ;
 		if(++time[1] == 0)
 			++time[0];
 		spl1();
 		if(time[1]==tout[1] && time[0]==tout[0])
-			wakeup(tout);
+			wakeup((int)tout);
 		if((time[1]&03) == 0) {
 			runrun++;
-			wakeup(&lbolt);
+			wakeup((int)&lbolt);
 		}
 		for(pp = &proc[0]; pp < &proc[NPROC]; pp++)
 		if (pp->p_stat) {
 			if(pp->p_time != 127)
 				pp->p_time++;
 			if((pp->p_cpu & 0377) > SCHMAG)
-				pp->p_cpu =- SCHMAG; else
+				pp->p_cpu -= SCHMAG; else
 				pp->p_cpu = 0;
 			if(pp->p_pri > PUSER)
 				setpri(pp);
 		}
 		if(runin!=0) {
 			runin = 0;
-			wakeup(&runin);
+			wakeup((int)&runin);
 		}
 		if((ps&UMODE) == UMODE) {
 			u.u_ar0 = &r0;
 			if(issig())
 				psig();
-			setpri(u.u_procp);
+			setpri((struct proc *)u.u_procp);
 		}
 	}
 }
@@ -142,21 +144,21 @@ out:
  * first entry has the effect of
  * updating all entries.
  */
-timeout(fun, arg, tim)
+void timeout(int (*fun)(), int arg, int tim)
 {
 	register struct callo *p1, *p2;
-	register t;
+	register int t;
 	int s;
 
 	t = tim;
-	s = PS->integ;
+	s = *PS;
 	p1 = &callout[0];
 	spl7();
 	while(p1->c_func != 0 && p1->c_time <= t) {
-		t =- p1->c_time;
+		t -= p1->c_time;
 		p1++;
 	}
-	p1->c_time =- t;
+	p1->c_time -= t;
 	p2 = p1;
 	while(p2->c_func != 0)
 		p2++;
@@ -169,5 +171,5 @@ timeout(fun, arg, tim)
 	p1->c_time = t;
 	p1->c_func = fun;
 	p1->c_arg = arg;
-	PS->integ = s;
+	*PS = s;
 }
