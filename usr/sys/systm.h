@@ -4,14 +4,28 @@
  * routine.
  */
 char	canonb[CANBSIZ];	/* buffer for erase and kill (#@) */
-int	coremap[CMAPSIZ];	/* space for core allocation */
-int	swapmap[SMAPSIZ];	/* space for swap allocation */
+struct map {
+	int	m_size;
+	char	*m_addr;
+};
+struct map coremap[CMAPSIZ];	/* space for core allocation */
+struct map swapmap[SMAPSIZ];	/* space for swap allocation */
 int	*rootdir;		/* pointer to inode of root directory */
+int	*runq;			/* head of linked list of running processes */
 int	cputype;		/* type of cpu =40, 45, or 70 */
-int	execnt;			/* number of processes in exec */
 int	lbolt;			/* time of day in 60th not in time */
-int	time[2];		/* time in sec from 1970 */
-int	tout[2];		/* time of day of next sleep */
+long	time;			/* time in sec from 1970 */
+long	tout;			/* time of day of next sleep */
+int	*acctp;			/* inode of accounting file */
+struct {
+	char	ac_comm[DIRSIZ];	/* Accounting command name */
+	long	ac_utime;		/* Accounting user time */
+	long	ac_stime;		/* Accounting system time */
+	long	ac_etime;		/* Accounting elapsed time */
+	char	ac_uid;			/* Accounting user ID */
+	char	ac_flag;		/* Accounting flag (unused) */
+} acctbuf;
+
 /*
  * The callout structure is for
  * a routine arranging
@@ -19,7 +33,7 @@ int	tout[2];		/* time of day of next sleep */
  * (clock.c) with a specified argument,
  * in a specified amount of time.
  * Used, for example, to time tab
- * delays on teletypes.
+ * delays on typewriters.
  */
 struct	callo
 {
@@ -38,6 +52,23 @@ struct	mount
 	int	*m_bufp;	/* pointer to superblock */
 	int	*m_inodp;	/* pointer to mounted on inode */
 } mount[NMOUNT];
+
+/*
+ * Nblkdev is the number of entries
+ * (rows) in the block switch. It is
+ * set in binit/bio.c by making
+ * a pass over the switch.
+ * Used in bounds checking on major
+ * device numbers.
+ */
+int	nblkdev;
+
+/*
+ * Number of character switch entries.
+ * Set by cinit/tty.c
+ */
+int	nchrdev;
+
 int	mpid;			/* generic for unique process id's */
 char	runin;			/* scheduling flag */
 char	runout;			/* scheduling flag */
@@ -52,3 +83,13 @@ int	nswap;			/* size of swap space */
 int	updlock;		/* lock for sync */
 int	rablock;		/* block to be read ahead */
 char	regloc[];		/* locs. of saved user registers (trap.c) */
+char	msgbuf[MSGBUFS];	/* saved "printf" characters */
+/*
+ * Instrumentation
+ */
+int	dk_busy;
+long	dk_time[32];
+long	dk_numb[3];
+long	dk_wds[3];
+long	tk_nin;
+long	tk_nout;

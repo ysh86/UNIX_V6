@@ -27,16 +27,6 @@ struct	bdevsw
 } bdevsw[];
 
 /*
- * Nblkdev is the number of entries
- * (rows) in the block switch. It is
- * set in binit/bio.c by making
- * a pass over the switch.
- * Used in bounds checking on major
- * device numbers.
- */
-int	nblkdev;
-
-/*
  * Character device switch.
  */
 struct	cdevsw
@@ -47,9 +37,3 @@ struct	cdevsw
 	int	(*d_write)();
 	int	(*d_sgtty)();
 } cdevsw[];
-
-/*
- * Number of character switch entries.
- * Set by cinit/tty.c
- */
-int	nchrdev;

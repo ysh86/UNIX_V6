@@ -9,6 +9,7 @@
 #include "../param.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 
 #define	LPADDR	0177514
 
@@ -50,7 +51,7 @@ lpopen(dev, flag)
 		u.u_error = EIO;
 		return;
 	}
-	lp11.flag =| (IND|EJECT|OPEN);
+	lp11.flag =| (IND|EJECT|OPEN|CAP);
 	LPADDR->lpsr =| IENABLE;
 	lpcanon(FORM);
 }
@@ -166,7 +167,6 @@ lpstart()
 
 lpint()
 {
-	register int c;
 
 	lpstart();
 	if (lp11.cc == LPLWAT || lp11.cc == 0)

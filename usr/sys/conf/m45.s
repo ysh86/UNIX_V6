@@ -74,6 +74,10 @@ start:
 	inc	$-1
 	bne	.
 	reset
+/ Set loc. 0 to trap to system, in case of
+/ hardware glitch
+	mov	$trap,0		/ in case of bad trap through 0
+	mov	$340+15.,2	/ high pri, trap type 15
 	clr	PS
 
 / set KI0 to physical 0
@@ -123,14 +127,15 @@ start:
 	bit	$20,SSR3
 	beq	1f
 	mov	$70.,_cputype
+	mov	$3,*$MSCR		/ Disable UNIBUS traps, non-fatal traps
 1:
 	inc	SSR0
-	mov	$_etext,r0
-	mov	$_edata,r1
+	mov	$_etext+100,r2
+	mov	$_edata+100,r1
 	add	$_etext-8192.,r1
 1:
 	mov	-(r1),-(sp)
-	mtpi	-(r0)
+	mtpi	-(r2)
 	cmp	r1,$_edata
 	bhi	1b
 1:
@@ -148,6 +153,37 @@ start:
 	bic	$!1777,r2
 	add	KISA1,r2
 	mov	r2,KDSA6
+
+/ Turn off write permission on kernel text
+/ Take stuff above data out of address space
+
+	mov	$KISD0,r0
+1:
+	mov	$77402,(r0)+
+	cmp	r0,$KISD7
+	blo	1b
+
+	mov	$_end+63.,r0
+	ash	$-6,r0
+	bic	$!1777,r0
+	mov	$KDSD0,r1
+1:
+	cmp	r0,$200
+	bge	2f
+	dec	r0
+	bge	4f
+	clr	(r1)
+	br	3f
+4:
+	movb	r0,1(r1)
+	br	3f
+2:
+	movb	$177,1(r1)
+3:
+	tst	(r1)+
+	sub	$200,r0
+	cmp	r1,$KDSD5
+	blos	1b
 
 / set up supervisor D registers
 
@@ -196,7 +232,7 @@ trap:
 	rtt
 .text
 
-.globl	_runrun, _swtch
+.globl	_runrun, _qswtch
 call1:
 	mov	saveps,-(sp)
 	spl	0
@@ -221,7 +257,7 @@ call:
 	beq	2f
 	spl	0
 	jsr	pc,_savfp
-	jsr	pc,_swtch
+	jsr	pc,_qswtch
 	br	2b
 2:
 .if .fpp
@@ -333,7 +369,7 @@ _getc:
 	mov	2(sp),r1
 	mov	PS,-(sp)
 	mov	r2,-(sp)
-	spl	5
+	spl	6
 	mov	2(r1),r2	/ first ptr
 	beq	9f		/ empty
 	movb	(r2)+,r0	/ character
@@ -371,7 +407,7 @@ _putc:
 	mov	PS,-(sp)
 	mov	r2,-(sp)
 	mov	r3,-(sp)
-	spl	5
+	spl	6
 	mov	4(r1),r2	/ last ptr
 	bne	1f
 	mov	_cfreelist,r2
@@ -618,11 +654,12 @@ copsu:
 	mov	$-1,r0
 	rts	pc
 
-.globl	_idle
+.globl	_idle, _waitloc
 _idle:
 	mov	PS,-(sp)
 	spl	0
 	wait
+_waitloc:
 	mov	(sp)+,PS
 	rts	pc
 
@@ -799,15 +836,18 @@ KISA0	= 172340
 KISA1	= 172342
 KISA7	= 172356
 KISD0	= 172300
+KISD7	= 172316
 KDSA0	= 172360
 KDSA6	= 172374
 KDSA7	= 172376
 KDSD0	= 172320
+KDSD5	= 172332
 MTC	= 172522
 SISA0	= 172240
 SISA1	= 172242
 SISD0	= 172200
 SISD1	= 172202
+MSCR	= 017777746	/ 11/70 memory control register
 IO	= 177600
 
 .data

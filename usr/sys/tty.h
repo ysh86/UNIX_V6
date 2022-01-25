@@ -37,10 +37,8 @@ struct tty
 	char	t_state;	/* internal state, not visible externally */
 	char	t_char;		/* character temporary */
 	int	t_speeds;	/* output+input line speed */
-	int	t_dev;		/* device name */
+	int	t_pgrp;		/* process group name */
 };
-
-char partab[];			/* ASCII table: parity, character class */
 
 #define	TTIPRI	10
 #define	TTOPRI	20
@@ -52,8 +50,8 @@ char partab[];			/* ASCII table: parity, character class */
 #define	CINTR	0177		/* DEL */
 
 /* limits */
-#define	TTHIWAT	50
-#define	TTLOWAT	30
+#define	TTHIWAT	100
+#define	TTLOWAT	50
 #define	TTYHOG	256
 
 /* modes */

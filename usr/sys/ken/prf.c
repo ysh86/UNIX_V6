@@ -1,11 +1,10 @@
 #
-/*
- */
-
 #include "../param.h"
 #include "../seg.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../conf.h"
+#include "../systm.h"
 
 /*
  * Address and structure of the
@@ -18,6 +17,7 @@ struct
 	int	xsr;
 	int	xbr;
 };
+char	*msgbufp msgbuf;	/* Next saved printf character */
 
 /*
  * In case console is off,
@@ -37,7 +37,7 @@ char	*panicstr;
  * suspended.
  * Printf should not be used for chit-chat.
  */
-printf(fmt,x1,x2,x3,x4,x5,x6,x7,x8,x9,xa,xb,xc)
+printf(fmt,x1)
 char fmt[];
 {
 	register char *s;
@@ -80,15 +80,29 @@ printn(n, b)
  * status.
  * If the switches are 0, all
  * printing is inhibited.
+ *
+ * Whether or not printing is inhibited,
+ * the last MSGBUFS characters
+ * are saved in msgbuf for inspection later.
  */
 putchar(c)
 {
-	register rc, s;
+	register rc, s, timo;
 
 	rc = c;
+	if (rc!='\0' && rc!='\r' && rc!=0177) {
+		*msgbufp++ = rc;
+		if (msgbufp >= &msgbuf[MSGBUFS])
+			msgbufp = msgbuf;
+	}
 	if(SW->integ == 0)
 		return;
-	while((KL->xsr&0200) == 0)
+	timo = 30000;
+	/*
+	 * Try waiting for the console tty to come ready,
+	 * otherwise give up after a reasonable time.
+	 */
+	while((KL->xsr&0200)==0 && --timo!=0)
 		;
 	if(rc == 0)
 		return;

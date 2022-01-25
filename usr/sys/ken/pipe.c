@@ -1,12 +1,12 @@
 #
-/*
- */
-
 #include "../param.h"
 #include "../systm.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../file.h"
+#include "../filex.h"
 #include "../reg.h"
 
 /*
@@ -74,28 +74,15 @@ loop:
 	 */
 
 	plock(ip);
-
 	/*
-	 * If the head (read) has caught up with
-	 * the tail (write), reset both to 0.
+	 * If nothing in the pipe, wait.
 	 */
-
-	if(rp->f_offset[1] == ip->i_size1) {
-		if(rp->f_offset[1] != 0) {
-			rp->f_offset[1] = 0;
-			ip->i_size1 = 0;
-			if(ip->i_mode&IWRITE) {
-				ip->i_mode =& ~IWRITE;
-				wakeup(ip+1);
-			}
-		}
-
+	if (ip->i_size1==0) {
 		/*
 		 * If there are not both reader and
 		 * writer active, return without
 		 * satisfying read.
 		 */
-
 		prele(ip);
 		if(ip->i_count < 2)
 			return;
@@ -112,6 +99,18 @@ loop:
 	u.u_offset[1] = rp->f_offset[1];
 	readi(ip);
 	rp->f_offset[1] = u.u_offset[1];
+	/*
+	 * If reader has caught up with writer, reset
+	 * offset and size to 0.
+	 */
+	if (rp->f_offset[1] == ip->i_size1) {
+		rp->f_offset[1] = 0;
+		ip->i_size1 = 0;
+		if (ip->i_mode&IWRITE) {
+			ip->i_mode =& ~IWRITE;
+			wakeup(ip+1);
+		}
+	}
 	prele(ip);
 }
 
@@ -158,7 +157,7 @@ loop:
 	 * and truncate it.
 	 */
 
-	if(ip->i_size1 == PIPSIZ) {
+	if(ip->i_size1 >= PIPSIZ) {
 		ip->i_mode =| IWRITE;
 		prele(ip);
 		sleep(ip+1, PPIPE);
@@ -168,11 +167,14 @@ loop:
 	/*
 	 * Write what is possible and
 	 * loop back.
+	 * If writing less than PIPSIZ, it always goes.
+	 * One can therefore get a file > PIPSIZ if write
+	 * sizes do not divide PIPSIZ.
 	 */
 
 	u.u_offset[0] = 0;
 	u.u_offset[1] = ip->i_size1;
-	u.u_count = min(c, PIPSIZ-u.u_offset[1]);
+	u.u_count = min(c, PIPSIZ);
 	c =- u.u_count;
 	writei(ip);
 	prele(ip);

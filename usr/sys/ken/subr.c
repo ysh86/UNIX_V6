@@ -1,12 +1,12 @@
 #
-/*
- */
-
 #include "../param.h"
 #include "../conf.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../systm.h"
 
 /*
@@ -52,6 +52,7 @@ int bn;
 			ip->i_addr[0] = bp->b_blkno;
 			bdwrite(bp);
 			ip->i_mode =| ILARG;
+			ip->i_flag =| IUPD;
 			goto large;
 		}
 		nb = ip->i_addr[bn];
@@ -76,10 +77,10 @@ int bn;
 	if(bn & 0174000)
 		i = 7;
 	if((nb=ip->i_addr[i]) == 0) {
-		ip->i_flag =| IUPD;
 		if ((bp = alloc(d)) == NULL)
 			return(NULL);
 		ip->i_addr[i] = bp->b_blkno;
+		ip->i_flag =| IUPD;
 	} else
 		bp = bread(d, nb);
 	bap = bp->b_addr;
@@ -132,10 +133,12 @@ int bn;
 passc(c)
 char c;
 {
+	register id;
 
-	if(u.u_segflg)
-		*u.u_base = c; else
-		if(subyte(u.u_base, c) < 0) {
+	if((id = u.u_segflg) == 1)
+		*u.u_base = c;
+	else
+		if(id?suibyte(u.u_base, c):subyte(u.u_base, c) < 0) {
 			u.u_error = EFAULT;
 			return(-1);
 		}
@@ -155,13 +158,14 @@ char c;
  */
 cpass()
 {
-	register c;
+	register c, id;
 
 	if(u.u_count == 0)
 		return(-1);
-	if(u.u_segflg)
-		c = *u.u_base; else
-		if((c=fubyte(u.u_base)) < 0) {
+	if((id = u.u_segflg) == 1)
+		c = *u.u_base;
+	else
+		if((c = id==0?fubyte(u.u_base):fuibyte(u.u_base)) < 0) {
 			u.u_error = EFAULT;
 			return(-1);
 		}

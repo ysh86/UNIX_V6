@@ -1,14 +1,15 @@
 #
-/*
- */
-
 #include "../param.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../filsys.h"
 #include "../file.h"
+#include "../filex.h"
 #include "../conf.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../reg.h"
+#include "../systm.h"
 
 /*
  * Convert a user supplied
@@ -22,12 +23,11 @@ getf(f)
 	register *fp, rf;
 
 	rf = f;
-	if(rf<0 || rf>=NOFILE)
-		goto bad;
-	fp = u.u_ofile[rf];
-	if(fp != NULL)
-		return(fp);
-bad:
+	if (0<=rf && rf<NOFILE) {
+		fp = u.u_ofile[rf];
+		if(fp != NULL)
+			return(fp);
+	}
 	u.u_error = EBADF;
 	return(NULL);
 }
@@ -35,59 +35,47 @@ bad:
 /*
  * Internal form of close.
  * Decrement reference count on
- * file structure and call closei
- * on last closef.
+ * file structure.
  * Also make sure the pipe protocol
  * does not constipate.
+ *
+ * Decrement reference count on the inode following
+ * removal to the referencing file structure.
+ * On the last close switch out the the device handler for
+ * special files.  Note that the handler is called
+ * on every open but only the last close.
  */
 closef(fp)
 int *fp;
 {
-	register *rfp, *ip;
+	register *ip;
+	register struct file *rfp;
+	int flag;
+	register int (*cfunc)();
 
-	rfp = fp;
+	if ((rfp = fp) == NULL)
+		return;
+	ip = rfp->f_inode;
 	if(rfp->f_flag&FPIPE) {
-		ip = rfp->f_inode;
 		ip->i_mode =& ~(IREAD|IWRITE);
 		wakeup(ip+1);
 		wakeup(ip+2);
 	}
-	if(rfp->f_count <= 1)
-		closei(rfp->f_inode, rfp->f_flag&FWRITE);
-	rfp->f_count--;
-}
-
-/*
- * Decrement reference count on an
- * inode due to the removal of a
- * referencing file structure.
- * On the last closei, switchout
- * to the close entry point of special
- * device handler.
- * Note that the handler gets called
- * on every open and only on the last
- * close.
- */
-closei(ip, rw)
-int *ip;
-{
-	register *rip;
-	register dev, maj;
-
-	rip = ip;
-	dev = rip->i_addr[0];
-	maj = rip->i_addr[0].d_major;
-	if(rip->i_count <= 1)
-	switch(rip->i_mode&IFMT) {
-
-	case IFCHR:
-		(*cdevsw[maj].d_close)(dev, rw);
-		break;
-
-	case IFBLK:
-		(*bdevsw[maj].d_close)(dev, rw);
-	}
-	iput(rip);
+	if (--rfp->f_count > 0)
+		return;
+	plock(ip);
+	iput(ip);
+	if ((ip->i_mode&IFMT) == IFCHR)
+		cfunc = cdevsw[ip->i_addr[0].d_major].d_close;
+	else if ((ip->i_mode&IFMT)== IFBLK)
+		cfunc = bdevsw[ip->i_addr[0].d_major].d_close;
+	else
+		return;
+	flag = rfp->f_flag&FWRITE;
+	for (rfp=file; rfp < &file[NFILE]; rfp++)
+		if (rfp->f_count && rfp->f_inode==ip)
+			return;
+	(*cfunc)(ip->i_addr[0], flag);
 }
 
 /*
@@ -105,7 +93,7 @@ int *ip;
 
 	rip = ip;
 	dev = rip->i_addr[0];
-	maj = rip->i_addr[0].d_major;
+	maj = rip->i_addr[0].d_major & 0377;
 	switch(rip->i_mode&IFMT) {
 
 	case IFCHR:
@@ -136,9 +124,7 @@ bad:
  * The mode is shifted to select
  * the owner/group/other fields.
  * The super user is granted all
- * permissions except for EXEC where
- * at least one of the EXEC bits must
- * be on.
+ * permissions.
  */
 access(aip, mode)
 int *aip;
@@ -157,12 +143,8 @@ int *aip;
 			return(1);
 		}
 	}
-	if(u.u_uid == 0) {
-		if(m == IEXEC && (ip->i_mode & 
-			(IEXEC | (IEXEC>>3) | (IEXEC>>6))) == 0)
-				goto bad;
+	if(u.u_uid == 0)
 		return(0);
-	}
 	if(u.u_uid != ip->i_uid) {
 		m =>> 3;
 		if(u.u_gid != ip->i_gid)

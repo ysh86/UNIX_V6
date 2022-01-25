@@ -4,10 +4,13 @@
 
 #include "../param.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../conf.h"
 #include "../systm.h"
 #include "../proc.h"
+#include "../procx.h"
 #include "../seg.h"
 
 /*
@@ -19,7 +22,8 @@
  * swapping.
  */
 char	buffers[NBUF][514];
-struct	buf	swbuf;
+struct	buf	swbuf1;
+struct	buf	swbuf2;
 
 /*
  * Declarations of the tables for the magtape devices;
@@ -113,13 +117,15 @@ struct buf *bp;
 
 	rbp = bp;
 	flag = rbp->b_flags;
-	rbp->b_flags =& ~(B_READ | B_DONE | B_ERROR | B_DELWRI);
+	rbp->b_flags =& ~(B_READ | B_DONE | B_ERROR | B_DELWRI | B_AGE);
 	rbp->b_wcount = -256;
 	(*bdevsw[rbp->b_dev.d_major].d_strategy)(rbp);
 	if ((flag&B_ASYNC) == 0) {
 		iowait(rbp);
 		brelse(rbp);
-	} else if ((flag&B_DELWRI)==0)
+	} else
+	if (flag & B_DELWRI)
+		rbp->b_flags =| B_AGE; else
 		geterror(rbp);
 }
 
@@ -178,14 +184,22 @@ struct buf *bp;
 	}
 	if (rbp->b_flags&B_ERROR)
 		rbp->b_dev.d_minor = -1;  /* no assoc. on error */
-	backp = &bfreelist.av_back;
 	sps = PS->integ;
 	spl6();
-	rbp->b_flags =& ~(B_WANTED|B_BUSY|B_ASYNC);
-	(*backp)->av_forw = rbp;
-	rbp->av_back = *backp;
-	*backp = rbp;
-	rbp->av_forw = &bfreelist;
+	if(rbp->b_flags & B_AGE) {
+		backp = &bfreelist.av_forw;
+		(*backp)->av_back = rbp;
+		rbp->av_forw = *backp;
+		*backp = rbp;
+		rbp->av_back = &bfreelist;
+	} else {
+		backp = &bfreelist.av_back;
+		(*backp)->av_forw = rbp;
+		rbp->av_back = *backp;
+		*backp = rbp;
+		rbp->av_forw = &bfreelist;
+	}
+	rbp->b_flags =& ~(B_WANTED|B_BUSY|B_ASYNC|B_AGE);
 	PS->integ = sps;
 }
 
@@ -212,7 +226,7 @@ incore(adev, blkno)
  * block is already associated, return it; otherwise search
  * for the oldest non-busy buffer and reassign it.
  * When a 512-byte area is wanted for some random reason
- * (e.g. during exec, for the user arglist) getblk can be called
+ * getblk can be called
  * with device NODEV to avoid unwanted associativity.
  */
 getblk(dev, blkno)
@@ -237,7 +251,7 @@ getblk(dev, blkno)
 			spl6();
 			if (bp->b_flags&B_BUSY) {
 				bp->b_flags =| B_WANTED;
-				sleep(bp, PRIBIO);
+				sleep(bp, PRIBIO+1);
 				spl0();
 				goto loop;
 			}
@@ -249,7 +263,7 @@ getblk(dev, blkno)
 	spl6();
 	if (bfreelist.av_forw == &bfreelist) {
 		bfreelist.b_flags =| B_WANTED;
-		sleep(&bfreelist, PRIBIO);
+		sleep(&bfreelist, PRIBIO+1);
 		spl0();
 		goto loop;
 	}
@@ -260,7 +274,7 @@ getblk(dev, blkno)
 		bwrite(bp);
 		goto loop;
 	}
-	bp->b_flags = B_BUSY | B_RELOC;
+	bp->b_flags = B_BUSY;
 	bp->b_back->b_forw = bp->b_forw;
 	bp->b_forw->b_back = bp->b_back;
 	bp->b_forw = dp->b_forw;
@@ -450,6 +464,7 @@ int *devloc, *abae;
  * is an rh70 and contains 22 bit addressing.
  */
 int	maplock;
+
 mapalloc(abp)
 struct buf *abp;
 {
@@ -461,7 +476,7 @@ struct buf *abp;
 	spl6();
 	while(maplock&B_BUSY) {
 		maplock =| B_WANTED;
-		sleep(&maplock, PSWP);
+		sleep(&maplock, PSWP+1);
 	}
 	maplock =| B_BUSY;
 	spl0();
@@ -490,29 +505,33 @@ struct buf *bp;
  */
 swap(blkno, coreaddr, count, rdflg)
 {
-	register int *fp;
+	register struct buf *bp;
 
-	fp = &swbuf.b_flags;
+	bp = &swbuf1;
+	if(bp->b_flags & B_BUSY)
+		if((swbuf2.b_flags&B_WANTED) == 0)
+			bp = &swbuf2;
 	spl6();
-	while (*fp&B_BUSY) {
-		*fp =| B_WANTED;
-		sleep(fp, PSWP);
+	while (bp->b_flags&B_BUSY) {
+		bp->b_flags =| B_WANTED;
+		sleep(bp, PSWP+1);
 	}
-	*fp = B_BUSY | B_PHYS | rdflg;
-	swbuf.b_dev = swapdev;
-	swbuf.b_wcount = - (count<<5);	/* 32 w/block */
-	swbuf.b_blkno = blkno;
-	swbuf.b_addr = coreaddr<<6;	/* 64 b/block */
-	swbuf.b_xmem = (coreaddr>>10) & 077;
-	(*bdevsw[swapdev>>8].d_strategy)(&swbuf);
+	bp->b_flags = B_BUSY | B_PHYS | rdflg;
+	bp->b_dev = swapdev;
+	bp->b_wcount = - (count<<5);	/* 32 w/block */
+	bp->b_blkno = blkno;
+	bp->b_addr = coreaddr<<6;	/* 64 b/block */
+	bp->b_xmem = (coreaddr>>10) & 077;
+	(*bdevsw[swapdev>>8].d_strategy)(bp);
 	spl6();
-	while((*fp&B_DONE)==0)
-		sleep(fp, PSWP);
-	if (*fp&B_WANTED)
-		wakeup(fp);
+	while((bp->b_flags&B_DONE)==0)
+		sleep(bp, PSWP);
+	if (bp->b_flags&B_WANTED)
+		wakeup(bp);
 	spl0();
-	*fp =& ~(B_BUSY|B_WANTED);
-	return(*fp&B_ERROR);
+	bp->b_flags =& ~(B_BUSY|B_WANTED);
+	if (bp->b_flags & B_ERROR)
+		panic("IO err in swap");
 }
 
 /*
@@ -586,7 +605,7 @@ int (*strat)();
 	spl6();
 	while (bp->b_flags&B_BUSY) {
 		bp->b_flags =| B_WANTED;
-		sleep(bp, PRIBIO);
+		sleep(bp, PRIBIO+1);
 	}
 	bp->b_flags = B_BUSY | B_PHYS | rw;
 	bp->b_dev = dev;

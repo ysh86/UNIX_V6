@@ -6,9 +6,9 @@
 #define	UISA	0177640		/* first user I-space address register */
 #define	UDSA	0177660		/* first user D-space address register */
 #define	RO	02		/* access abilities */
-#define	WO	04
 #define	RW	06
 #define	ED	010		/* extend direction */
+#define	TX	020		/* Software: text segment */
 
 /*
  * structure used to address

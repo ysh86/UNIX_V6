@@ -9,6 +9,7 @@
 #include "../param.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 
 struct dn {
 	struct {
@@ -74,6 +75,7 @@ dnwrite(dev)
 		if (u.u_count==0 || (dp->dn_stat&PND)==0 || (c=cpass())<0)
 			continue;
 		if (c=='-') {
+			sleep(&lbolt, DNPRI);
 			sleep(&lbolt, DNPRI);
 			sleep(&lbolt, DNPRI);
 			goto contin;

@@ -1,8 +1,5 @@
 #
 /*
- */
-
-/*
  * This table is the switch used to transfer
  * to the appropriate routine for processing a system call.
  * Each row contains the number of arguments expected
@@ -37,20 +34,20 @@ int	sysent[]
 	0, &getuid,			/* 24 = getuid */
 	0, &stime,			/* 25 = stime */
 	3, &ptrace,			/* 26 = ptrace */
-	0, &nosys,			/* 27 = x */
+	0, &alarm,			/* 27 = alarm */
 	1, &fstat,			/* 28 = fstat */
-	0, &nosys,			/* 29 = x */
+	0, &pause,			/* 29 = pause */
 	1, &nullsys,			/* 30 = smdate; inoperative */
 	1, &stty,			/* 31 = stty */
 	1, &gtty,			/* 32 = gtty */
-	0, &nosys,			/* 33 = x */
+	2, &saccess,			/* 33 = access */
 	0, &nice,			/* 34 = nice */
 	0, &sslep,			/* 35 = sleep */
 	0, &sync,			/* 36 = sync */
 	1, &kill,			/* 37 = kill */
 	0, &getswit,			/* 38 = switch */
-	0, &nosys,			/* 39 = x */
-	0, &nosys,			/* 40 = x */
+	0, &nullsys,			/* 39 = setpgrp (not in yet) */
+	0, &tell,			/* 40 = tell */
 	0, &dup,			/* 41 = dup */
 	0, &pipe,			/* 42 = pipe */
 	1, &times,			/* 43 = times */
@@ -59,9 +56,9 @@ int	sysent[]
 	0, &setgid,			/* 46 = setgid */
 	0, &getgid,			/* 47 = getgid */
 	2, &ssig,			/* 48 = sig */
-	0, &nosys,			/* 49 = x */
-	0, &nosys,			/* 50 = x */
-	0, &nosys,			/* 51 = x */
+	0, &nosys,			/* 49 = reserved for USG */
+	0, &nosys,			/* 50 = reserved for USG */
+	1, &sysacct,			/* 51 = turn acct off/on */
 	0, &nosys,			/* 52 = x */
 	0, &nosys,			/* 53 = x */
 	0, &nosys,			/* 54 = x */

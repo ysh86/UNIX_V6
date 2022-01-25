@@ -22,7 +22,7 @@ struct	inode
 	char	*i_size1;	/* least sig */
 	int	i_addr[8];	/* device addresses constituting file */
 	int	i_lastr;	/* last logical block read (for read-ahead) */
-} inode[NINODE];
+};
 
 /* flags */
 #define	ILOCK	01		/* inode is locked */

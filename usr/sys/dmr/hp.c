@@ -13,8 +13,10 @@
 
 #include "../param.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 
 struct {
 	int	hpcs1;	/* Control and Status register 1 */

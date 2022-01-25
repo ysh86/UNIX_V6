@@ -2,10 +2,12 @@
 #include "../param.h"
 #include "../systm.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../proc.h"
+#include "../procx.h"
 
 #define	UMODE	0170000
-#define	SCHMAG	10
+#define	SCHMAG	8/10
 
 /*
  * clock is called straight from
@@ -19,14 +21,17 @@
  *	maintain date
  *	profile
  *	tout wakeup (sys sleep)
- *	lightning bolt wakeup (every 4 sec)
+ *	lightning bolt wakeup (every second)
  *	alarm clock signals
  *	jab the scheduler
  */
+char	*await { &waitloc };
+
 clock(dev, sp, r1, nps, r0, pc, ps)
 {
 	register struct callo *p1, *p2;
 	register struct proc *pp;
+	int a;
 
 	/*
 	 * restart clock
@@ -86,12 +91,20 @@ clock(dev, sp, r1, nps, r0, pc, ps)
 	 */
 
 out:
+	a = dk_busy&07;
 	if((ps&UMODE) == UMODE) {
 		u.u_utime++;
 		if(u.u_prof[3])
 			incupc(pc, u.u_prof);
-	} else
+		if(u.u_procp->p_nice > 2)
+			a =+ 8;
+	} else {
+		a =+ 16;
+		if (pc == await)
+			a =+ 8;
 		u.u_stime++;
+	}
+	dk_time[a] =+ 1;
 	pp = u.u_procp;
 	if(++pp->p_cpu == 0)
 		pp->p_cpu--;
@@ -99,23 +112,26 @@ out:
 		if((ps&0340) != 0)
 			return;
 		lbolt =- HZ;
-		if(++time[1] == 0)
-			++time[0];
+		++time;
 		spl1();
-		if(time[1]==tout[1] && time[0]==tout[0])
-			wakeup(tout);
-		if((time[1]&03) == 0) {
-			runrun++;
+		if (time == tout)
+			wakeup(&tout);
+		runrun++;
 			wakeup(&lbolt);
-		}
 		for(pp = &proc[0]; pp < &proc[NPROC]; pp++)
-		if (pp->p_stat) {
+		if (pp->p_stat && pp->p_stat<SZOMB) {
 			if(pp->p_time != 127)
 				pp->p_time++;
-			if((pp->p_cpu & 0377) > SCHMAG)
-				pp->p_cpu =- SCHMAG; else
-				pp->p_cpu = 0;
-			if(pp->p_pri > PUSER)
+			if(pp->p_clktim)
+				if(--pp->p_clktim == 0)
+					psignal(pp, SIGCLK);
+			a = (pp->p_cpu & 0377)*SCHMAG + pp->p_nice;
+			if(a < 0)
+				a = 0;
+			if(a > 255)
+				a = 255;
+			pp->p_cpu = a;
+			if(pp->p_pri >= PUSER)
 				setpri(pp);
 		}
 		if(runin!=0) {
@@ -126,7 +142,10 @@ out:
 			u.u_ar0 = &r0;
 			if(issig())
 				psig();
-			setpri(u.u_procp);
+			pp = u.u_procp;
+			if (pp->p_nice==0 && u.u_utime > 60*HZ)
+				pp->p_nice = 2;
+			setpri(pp);
 		}
 	}
 }
@@ -141,6 +160,9 @@ out:
  * In this way, decrementing the
  * first entry has the effect of
  * updating all entries.
+ *
+ * The panic is there because there is nothing
+ * intelligent to be done if an entry won't fit.
  */
 timeout(fun, arg, tim)
 {
@@ -156,6 +178,8 @@ timeout(fun, arg, tim)
 		t =- p1->c_time;
 		p1++;
 	}
+	if (p1 >= &callout[NCALL-1])
+		panic("Timeout table overflow");
 	p1->c_time =- t;
 	p2 = p1;
 	while(p2->c_func != 0)

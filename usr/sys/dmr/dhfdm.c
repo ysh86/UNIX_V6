@@ -18,6 +18,6 @@ dmopen(dev)
 	tp->t_state =| CARR_ON;
 }
 
-dmclose(dev)
+dmctl(dev)
 {
 }

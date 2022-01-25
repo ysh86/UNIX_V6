@@ -24,7 +24,7 @@ trap:
 	mov	nofault,(sp)
 	rtt
 
-.globl	_runrun, _swtch
+.globl	_runrun, _qswtch
 call1:
 	tst	-(sp)
 	bic	$340,PS
@@ -45,7 +45,7 @@ call:
 	tstb	_runrun
 	beq	2f
 	bic	$340,PS
-	jsr	pc,_swtch
+	jsr	pc,_qswtch
 	br	2b
 2:
 	tst	(sp)+
@@ -105,7 +105,7 @@ _getc:
 	mov	PS,-(sp)
 	mov	r2,-(sp)
 	bis	$340,PS
-	bic	$100,PS		/ spl 5
+	bic	$40,PS		/ spl 6
 	mov	2(r1),r2	/ first ptr
 	beq	9f		/ empty
 	movb	(r2)+,r0	/ character
@@ -144,7 +144,7 @@ _putc:
 	mov	r2,-(sp)
 	mov	r3,-(sp)
 	bis	$340,PS
-	bic	$100,PS		/ spl 5
+	bic	$40,PS		/ spl 6
 	mov	4(r1),r2	/ last ptr
 	bne	1f
 	mov	_cfreelist,r2
@@ -526,11 +526,12 @@ copsu:
 	mov	$-1,r0
 	rts	pc
 
-.globl	_idle
+.globl	_idle, _waitloc
 _idle:
 	mov	PS,-(sp)
 	bic	$340,PS
 	wait
+_waitloc:
 	mov	(sp)+,PS
 	rts	pc
 
@@ -709,6 +710,11 @@ start:
 	bit	$1,SSR0
 	bne	start			/ loop if restart
 	reset
+
+/ Set loc. 0 to trap to system, in case of
+/ hardware glitch
+	mov	$trap,0
+	mov	$br7+15.,2
 
 / initialize systems segments
 

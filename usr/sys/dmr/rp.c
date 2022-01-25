@@ -1,15 +1,15 @@
 #
 /*
- */
-
-/*
  * RP disk driver
  */
 
 #include "../param.h"
+#include "../systm.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 
 struct {
 	int	rpds;
@@ -60,6 +60,11 @@ struct	buf	rrpbuf;
 
 #define	trksec	av_back
 #define	cylin	b_resid
+
+/*
+ * Monitoring device number
+ */
+#define	DK_N	2
 
 rpstrategy(abp)
 struct buf *abp;
@@ -112,6 +117,9 @@ rpstart()
 	rptab.d_active++;
 	RPADDR->rpda = bp->trksec;
 	devstart(bp, &RPADDR->rpca, bp->cylin, bp->b_dev.d_minor>>3);
+	dk_busy =| 1<<DK_N;
+	dk_numb[DK_N] =+ 1;
+	dk_wds[DK_N] =+ (-bp->b_wcount>>5) & 03777;
 }
 
 rpintr()
@@ -121,6 +129,7 @@ rpintr()
 
 	if (rptab.d_active == 0)
 		return;
+	dk_busy =& ~(1<<DK_N);
 	bp = rptab.d_actf;
 	rptab.d_active = 0;
 	if (RPADDR->rpcs < 0) {		/* error bit */

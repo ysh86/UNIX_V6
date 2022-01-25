@@ -8,47 +8,35 @@
 #include "../param.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../tty.h"
 #include "../proc.h"
+#include "../procx.h"
 
 syopen(dev, flag)
 {
-	register *tp;
 
-	if(tp = syttyp())
-	(*cdevsw[tp->t_dev.d_major].d_open)(tp->t_dev, flag);
+	if(u.u_ttyp == NULL) {
+		u.u_error = ENXIO;
+		return;
+	}
+	(*cdevsw[u.u_ttyd.d_major].d_open)(u.u_ttyd, flag);
 }
 
 syread(dev)
 {
-	register *tp;
 
-	if(tp = syttyp())
-	(*cdevsw[tp->t_dev.d_major].d_read)(tp->t_dev);
+	(*cdevsw[u.u_ttyd.d_major].d_read)(u.u_ttyd);
 }
 
 sywrite(dev)
 {
-	register *tp;
 
-	if(tp = syttyp())
-	(*cdevsw[tp->t_dev.d_major].d_write)(tp->t_dev);
+	(*cdevsw[u.u_ttyd.d_major].d_write)(u.u_ttyd);
 }
 
 sysgtty(dev, flag)
 {
-	register *tp;
 
-	if(tp = syttyp())
-	(*cdevsw[tp->t_dev.d_major].d_sgtty)(tp->t_dev, flag);
-}
-
-syttyp()
-{
-	register tp;
-
-	tp = u.u_procp->p_ttyp;
-	if(tp == NULL)
-		u.u_error = ENXIO;
-	return(tp);
+	(*cdevsw[u.u_ttyd.d_major].d_sgtty)(u.u_ttyd, flag);
 }

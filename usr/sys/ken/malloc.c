@@ -1,29 +1,15 @@
-#
-/*
- */
+#include "../param.h"
+#include "../systm.h"
 
 /*
- * Structure of the coremap and swapmap
- * arrays. Consists of non-zero count
- * and base address of that many
- * contiguous units.
- * (The coremap unit is 64 bytes,
- * the swapmap unit is 512 bytes)
- * The addresses are increasing and
- * the list is terminated with the
- * first zero count.
- */
-struct map
-{
-	char *m_size;
-	char *m_addr;
-};
-
-/*
- * Allocate size units from the given
+ * Allocate 'size' units from the given
  * map. Return the base of the allocated
  * space.
- * Algorithm is first fit.
+ * In a map, the addresses are increasing and the
+ * list is terminated by a 0 size.
+ * The core map unit is 64 bytes; the swap map unit
+ * is 512 bytes.
+ * Algorithm is first-fit.
  */
 malloc(mp, size)
 struct map *mp;
@@ -31,7 +17,7 @@ struct map *mp;
 	register int a;
 	register struct map *bp;
 
-	for (bp = mp; bp->m_size; bp++) {
+	for (bp=mp; bp->m_size; bp++) {
 		if (bp->m_size >= size) {
 			a = bp->m_addr;
 			bp->m_addr =+ size;
@@ -54,13 +40,18 @@ struct map *mp;
  */
 mfree(mp, size, aa)
 struct map *mp;
+char *aa;
 {
 	register struct map *bp;
 	register int t;
-	register int a;
+	register char *a;
 
 	a = aa;
-	for (bp = mp; bp->m_addr<=a && bp->m_size!=0; bp++);
+	if ((bp = mp)==coremap && runin) {
+		runin = 0;
+		wakeup(&runin);		/* Wake scheduler when freeing core */
+	}
+	for (; bp->m_addr<=a && bp->m_size!=0; bp++);
 	if (bp>mp && (bp-1)->m_addr+(bp-1)->m_size == a) {
 		(bp-1)->m_size =+ size;
 		if (a+size == bp->m_addr) {

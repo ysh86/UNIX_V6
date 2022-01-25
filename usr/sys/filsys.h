@@ -11,8 +11,8 @@
  */
 struct	filsys
 {
-	int	s_isize;	/* size in blocks of I list */
-	int	s_fsize;	/* size in blocks of entire volume */
+	char	*s_isize;	/* size in blocks of I list */
+	char	*s_fsize;	/* size in blocks of entire volume */
 	int	s_nfree;	/* number of in core free blocks (0-100) */
 	int	s_free[100];	/* in core free blocks */
 	int	s_ninode;	/* number of in core I nodes (0-100) */
@@ -21,6 +21,10 @@ struct	filsys
 	char	s_ilock;	/* lock during I list manipulation */
 	char	s_fmod;		/* super block modified flag */
 	char	s_ronly;	/* mounted read-only flag */
-	int	s_time[2];	/* current date of last update */
-	int	pad[50];
+	long	s_time;		/* current date of last update */
+	int	pad[40];
+	int	s_tfree;	/* Total free, for subsystem examination */
+	int	s_tinode;	/* Free inodes, for subsystem examination */
+	char	s_fname[6];	/* File system name */
+	char	s_fpack[6];	/* File system pack name */
 };

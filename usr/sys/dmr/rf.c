@@ -1,15 +1,15 @@
 #
 /*
- */
-
-/*
  * RF disk driver
  */
 
 #include "../param.h"
+#include "../systm.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 
 struct {
 	int	rfcs;
@@ -30,6 +30,11 @@ struct	buf	rrfbuf;
 #define	WCOM	04
 #define	CTLCLR	0400
 #define	IENABLE	0100
+
+/*
+ * Monitoring device number
+ */
+#define	DK_N	0
 
 rfstrategy(abp)
 struct buf *abp;
@@ -65,6 +70,9 @@ rfstart()
 	rftab.d_active++;
 	RFADDR->rfdae = bp->b_blkno.hibyte;
 	devstart(bp, &RFADDR->rfda, bp->b_blkno<<8, 0);
+	dk_busy =| 1<<DK_N;
+	dk_numb[DK_N] =+ 1;
+	dk_wds[DK_N] =+ (-bp->b_wcount>>5) & 03777;
 }
 
 rfintr()
@@ -73,6 +81,7 @@ rfintr()
 
 	if (rftab.d_active == 0)
 		return;
+	dk_busy =& ~(1<<DK_N);
 	bp = rftab.d_actf;
 	rftab.d_active = 0;
 	if (RFADDR->rfcs < 0) {		/* error bit */

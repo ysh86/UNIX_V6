@@ -9,7 +9,9 @@
 #include "../param.h"
 #include "../conf.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../user.h"
+#include "../userx.h"
 
 struct {
 	int	tccsr;
