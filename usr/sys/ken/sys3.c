@@ -1,15 +1,16 @@
 #
-/*
- */
-
 #include "../param.h"
 #include "../systm.h"
 #include "../reg.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../filsys.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../file.h"
+#include "../filex.h"
 #include "../conf.h"
 
 /*
@@ -49,16 +50,18 @@ int *ip;
 {
 	register i, *bp, *cp;
 
-	iupdat(ip, time);
+	iupdat(ip);
 	bp = bread(ip->i_dev, ldiv(ip->i_number+31, 16));
 	cp = bp->b_addr + 32*lrem(ip->i_number+31, 16) + 24;
 	ip = &(ip->i_dev);
 	for(i=0; i<14; i++) {
-		suword(ub, *ip++);
+		if (suword(ub, *ip) != *ip++)
+			u.u_error = EFAULT;
 		ub =+ 2;
 	}
 	for(i=0; i<4; i++) {
-		suword(ub, *cp++);
+		if (suword(ub, *cp) != *cp++)
+			u.u_error = EFAULT;
 		ub =+ 2;
 	}
 	brelse(bp);
@@ -127,6 +130,9 @@ smount()
 	smp->s_flock = 0;
 	smp->s_ronly = u.u_arg[2] & 1;
 	brelse(mp);
+/*
+	ssort(smp->s_free+1, smp->s_nfree-1);
+*/
 	ip->i_flag =| IMOUNT;
 	prele(ip);
 	return;
@@ -165,6 +171,7 @@ found:
 	(*bdevsw[d.d_major].d_close)(d, 0);
 	ip = mp->m_inodp;
 	ip->i_flag =& ~IMOUNT;
+	plock(ip);
 	iput(ip);
 	ip = mp->m_bufp;
 	mp->m_bufp = NULL;
@@ -183,7 +190,7 @@ getmdev()
 
 	ip = namei(&uchar, 0);
 	if(ip == NULL)
-		return;
+		return(NODEV);
 	if((ip->i_mode&IFMT) != IFBLK)
 		u.u_error = ENOTBLK;
 	d = ip->i_addr[0];

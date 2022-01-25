@@ -1,15 +1,15 @@
 #
 /*
- */
-
-/*
  * RK disk driver
  */
 
 #include "../param.h"
+#include "../systm.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 
 #define	RKADDR	0177400
 #define	NRK	4
@@ -23,6 +23,11 @@
 #define	ARDY	0100
 #define	WLO	020000
 #define	CTLRDY	0200
+
+/*
+ * Monitoring device bit
+ */
+#define	DK_N	1
 
 struct {
 	int rkds;
@@ -40,8 +45,7 @@ rkstrategy(abp)
 struct buf *abp;
 {
 	register struct buf *bp;
-	register *qc, *ql;
-	int d;
+	register int d;
 
 	bp = abp;
 	if(bp->b_flags&B_PHYS)
@@ -93,6 +97,9 @@ rkstart()
 		return;
 	rktab.d_active++;
 	devstart(bp, &RKADDR->rkda, rkaddr(bp), 0);
+	dk_busy =| 1<<DK_N;
+	dk_numb[DK_N] =+ 1;
+	dk_wds[DK_N] =+ (-bp->b_wcount>>5) & 03777;
 }
 
 rkintr()
@@ -101,6 +108,7 @@ rkintr()
 
 	if (rktab.d_active == 0)
 		return;
+	dk_busy =& ~(1<<DK_N);
 	bp = rktab.d_actf;
 	rktab.d_active = 0;
 	if (RKADDR->rkcs < 0) {		/* error bit */

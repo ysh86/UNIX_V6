@@ -9,9 +9,9 @@ struct	file
 {
 	char	f_flag;
 	char	f_count;	/* reference count */
-	int	f_inode;	/* pointer to inode structure */
+	struct inode *f_inode;	/* pointer to inode structure */
 	char	*f_offset[2];	/* read/write character pointer */
-} file[NFILE];
+};
 
 /* flags */
 #define	FREAD	01

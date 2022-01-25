@@ -2,6 +2,7 @@
 #include "../param.h"
 #include "../systm.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../proc.h"
 #include "../reg.h"
 #include "../seg.h"
@@ -11,6 +12,7 @@
 #define	SETD	0170011		/* SETD instruction */
 #define	SYS	0104400		/* sys (trap) instruction */
 #define	USER	020		/* user-mode flag added to dev */
+#define	MEMORY	0177740		/* 11/70 "memory" subsystem */
 
 /*
  * structure of the system entry table (sysent.c)
@@ -120,15 +122,11 @@ trap(dev, sp, r1, nps, r0, pc, ps)
 		trap1(callp->call);
 		if(u.u_intflg)
 			u.u_error = EINTR;
-		if(u.u_error < 100) {
-			if(u.u_error) {
-				ps =| EBIT;
-				r0 = u.u_error;
-			}
-			goto out;
+		if(u.u_error) {
+			ps =| EBIT;
+			r0 = u.u_error;
 		}
-		i = SIGSYS;
-		break;
+		goto out;
 
 	/*
 	 * Since the floating exception is an
@@ -163,13 +161,49 @@ trap(dev, sp, r1, nps, r0, pc, ps)
 			goto out;
 		i = SIGSEG;
 		break;
+
+	/*
+	 * The code here is a half-hearted
+	 * attempt to do something with all
+	 * of the 11/70 parity registers.
+	 * In fact, there is little that
+	 * can be done.
+	 */
+	case 10:
+	case 10+USER:
+		printf("parity\n");
+		if(cputype == 70) {
+			for(i=0; i<4; i++)
+				printf("%o ", MEMORY->r[i]);
+			printf("\n");
+			MEMORY->r[2] = -1;
+			if(dev & USER) {
+				i = SIGBUS;
+				break;
+			}
+		}
+		panic("parity");
+
+	/*
+	 * Locations 0-2 specify this style trap, since
+	 * DEC hardware often generates spurious
+	 * traps through location 0.  This is a
+	 * symptom of hardware problems and may
+	 * represent a real interrupt that got
+	 * sent to the wrong place.  Watch out
+	 * for hangs on disk completion if this message appears.
+	 */
+	case 15:
+	case 15+USER:
+		printf("Random interrupt ignored\n");
+		return;
 	}
 	psignal(u.u_procp, i);
 
 out:
 	if(issig())
 		psig();
-	setpri(u.u_procp);
+	curpri = setpri(u.u_procp);
 }
 
 /*

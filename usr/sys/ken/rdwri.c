@@ -1,11 +1,11 @@
 #
-/*
- */
-
 #include "../param.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../conf.h"
 #include "../systm.h"
 
@@ -17,7 +17,7 @@
  *	u_base		core address for destination
  *	u_offset	byte offset in file
  *	u_count		number of bytes to read
- *	u_segflg	read to kernel/user
+ *	u_segflg	read to kernel/user/user I
  */
 readi(aip)
 struct inode *aip;
@@ -71,7 +71,7 @@ struct inode *aip;
  *	u_base		core address for source
  *	u_offset	byte offset in file
  *	u_count		number of bytes to write
- *	u_segflg	write to kernel/user
+ *	u_segflg	write to kernel/user/user I
  */
 writei(aip)
 struct inode *aip;
@@ -168,11 +168,17 @@ struct buf *bp;
 
 	n = an;
 	cp = bp->b_addr + o;
-	if(u.u_segflg==0 && ((n | cp | u.u_base)&01)==0) {
+	if(u.u_segflg!=1 && ((n | cp | u.u_base)&01)==0) {
 		if (flag==B_WRITE)
-			cp = copyin(u.u_base, cp, n);
+			if (u.u_segflg==0)
+				cp = copyin(u.u_base, cp, n);
+			else
+				cp = copyiin(u.u_base, cp, n);
 		else
-			cp = copyout(cp, u.u_base, n);
+			if (u.u_segflg==0)
+				cp = copyout(cp, u.u_base, n);
+			else
+				cp = copyiout(cp, u.u_base, n);
 		if (cp) {
 			u.u_error = EFAULT;
 			return;

@@ -32,7 +32,7 @@ struct buf
 	char	*b_blkno;		/* block # on device */
 	char	b_error;		/* returned after I/O */
 	char	*b_resid;		/* words not transferred after error */
-} buf[NBUF];
+};
 
 /*
  * Each block device has a devtab, which contains private state stuff
@@ -56,12 +56,6 @@ struct devtab
 };
 
 /*
- * This is the head of the queue of available
- * buffers-- all unused except for the 2 list heads.
- */
-struct	buf bfreelist;
-
-/*
  * These flags are kept in b_flags.
  */
 #define	B_WRITE	0	/* non-read pseudo-flag */
@@ -72,6 +66,6 @@ struct	buf bfreelist;
 #define	B_PHYS	020	/* Physical IO potentially using UNIBUS map */
 #define	B_MAP	040	/* This block has the UNIBUS map allocated */
 #define	B_WANTED 0100	/* issue wakeup when BUSY goes off */
-#define	B_RELOC	0200	/* no longer used */
+#define	B_AGE	0200	/* delayed write for correct aging */
 #define	B_ASYNC	0400	/* don't wait for I/O completion */
 #define	B_DELWRI 01000	/* don't write till block leaves available list */

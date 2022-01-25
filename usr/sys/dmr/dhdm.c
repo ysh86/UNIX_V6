@@ -17,7 +17,8 @@ int	ndh11;		/* Set by dh.c to number of lines */
 #define	DONE	0200
 #define	SCENABL	040
 #define	CLSCAN	01000
-#define	TURNON	07	/* RQ send, CD lead, line enable */
+#define	TURNON	03	/* CD lead, line enable */
+#define	RQS	04	/* request to send */
 #define	TURNOFF	1	/* line enable only */
 #define	CARRIER	0100
 
@@ -46,19 +47,16 @@ dmopen(dev)
 }
 
 /*
- * If a DH line has the HUPCL mode,
- * turn off carrier when it is closed.
+ * Dump control bits into the DM registers.
  */
-dmclose(dev)
+dmctl(dev, bits)
 {
 	register struct tty *tp;
 
 	tp = &dh11[dev.d_minor];
-	if (tp->t_flags&HUPCL) {
-		DMADDR->dmcsr = dev.d_minor;
-		DMADDR->dmlstat = TURNOFF;
-		DMADDR->dmcsr = IENABLE|SCENABL;
-	}
+	DMADDR->dmcsr = dev.d_minor;
+	DMADDR->dmlstat = bits;
+	DMADDR->dmcsr = IENABLE|SCENABL;
 }
 
 /*
@@ -75,7 +73,7 @@ dmint()
 			wakeup(tp);
 			if ((DMADDR->dmlstat&CARRIER)==0) {
 				if ((tp->t_state&WOPEN)==0) {
-					signal(tp, SIGHUP);
+					signal(tp->t_pgrp, SIGHUP);
 					DMADDR->dmlstat = 0;
 					flushtty(tp);
 				}

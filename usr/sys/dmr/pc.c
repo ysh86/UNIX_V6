@@ -9,6 +9,7 @@
 #include "../param.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 
 #define	PCADDR	0177550
 

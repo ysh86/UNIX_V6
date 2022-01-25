@@ -8,8 +8,8 @@
 #include "../param.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../tty.h"
-#include "../proc.h"
 
 /* base address */
 #define	KLADDR	0177560	/* console */
@@ -19,6 +19,12 @@
 #define	NDL11	0
 #define DSRDY	02
 #define	RDRENB	01
+
+#define	NL1	000400
+#define	NL2	001000
+#define	CR2	020000
+#define	FF1	040000
+#define	TAB1	002000
 
 struct	tty kl11[NKL11+NDL11];
 
@@ -39,10 +45,6 @@ klopen(dev, flag)
 		return;
 	}
 	tp = &kl11[dev.d_minor];
-	if (u.u_procp->p_ttyp == 0) {
-		u.u_procp->p_ttyp = tp;
-		tp->t_dev = dev;
-	}
 	/*
 	 * set up minor 0 to address KLADDR
 	 * set up minor 1 thru NKL11-1 to address from KLBASE
@@ -56,12 +58,14 @@ klopen(dev, flag)
 	tp->t_addr = addr;
 	if ((tp->t_state&ISOPEN) == 0) {
 		tp->t_state = ISOPEN|CARR_ON;
-		tp->t_flags = XTABS|LCASE|ECHO|CRMOD;
+/*		tp->t_flags = XTABS|LCASE|ECHO|CRMOD|CR1;	/*tty33*/
+		tp->t_flags = EVENP|ECHO|NL1|CR2|FF1|TAB1;	/*tty37*/
 		tp->t_erase = CERASE;
 		tp->t_kill = CKILL;
 	}
 	addr->klrcsr =| IENABLE|DSRDY|RDRENB;
 	addr->kltcsr =| IENABLE;
+	ttyopen(dev, tp);
 }
 
 klclose(dev)

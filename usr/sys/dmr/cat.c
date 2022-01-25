@@ -8,6 +8,7 @@
 
 #include "../param.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../tty.h"
 
 #define	CATADDR	0167750
@@ -37,6 +38,7 @@ ctopen(dev)
 ctclose()
 {
 	cat.catlock = 0;
+	catintr();
 }
 
 ctwrite(dev)
@@ -59,12 +61,14 @@ catintr()
 {
 	register int c;
 
-	if (CATADDR->catcsr&DONE && (c=getc(&cat.oq))>=0) {
-		CATADDR->catbuf = c;
-		if (cat.oq.c_cc==0 || cat.oq.c_cc==CATLOWAT)
-			wakeup(&cat.oq);
-	} else {
-		if (cat.catlock==0)
-			CATADDR->catcsr = 0;
+	if (CATADDR->catcsr&DONE) {
+		if ((c = getc(&cat.oq)) >= 0) {
+			CATADDR->catbuf = c;
+			if (cat.oq.c_cc==0 || cat.oq.c_cc==CATLOWAT)
+				wakeup(&cat.oq);
+		} else {
+			if (cat.catlock==0)
+				CATADDR->catcsr = 0;
+		}
 	}
 }

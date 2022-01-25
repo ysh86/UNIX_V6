@@ -12,4 +12,11 @@ struct text
 	int	*x_iptr;	/* inode of prototype */
 	char	x_count;	/* reference count */
 	char	x_ccount;	/* number of loaded references */
-} text[NTEXT];
+	char	x_flag;		/* traced, written flags */
+};
+
+#define	XTRC	01		/* Text may be written, exclusive use */
+#define	XWRIT	02		/* Text written into, must swap out */
+#define	XLOAD	04		/* Currently being read from file */
+#define	XLOCK	010		/* Being swapped in or out */
+#define	XWANT	020		/* Wanted for swapping */

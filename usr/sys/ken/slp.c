@@ -1,23 +1,26 @@
 #
-/*
- */
-
 #include "../param.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../proc.h"
+#include "../procx.h"
 #include "../text.h"
+#include "../textx.h"
 #include "../systm.h"
 #include "../file.h"
+#include "../filex.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../buf.h"
+#include "../bufx.h"
 
 /*
  * Give up the processor till a wakeup occurs
  * on chan, at which time the process
  * enters the scheduling queue at priority pri.
  * The most important effect of pri is that when
- * pri<0 a signal cannot disturb the sleep;
- * if pri>=0 signals will be processed.
+ * pri<=0 a signal cannot disturb the sleep;
+ * if pri>0 signals will be processed.
  * Callers of this routine must be prepared for
  * premature return, and check that the reason for
  * sleeping has gone away.
@@ -28,13 +31,17 @@ sleep(chan, pri)
 
 	s = PS->integ;
 	rp = u.u_procp;
-	if(pri >= 0) {
-		if(issig())
+	spl6();
+	rp->p_stat = SSLEEP;
+	rp->p_wchan = chan;
+	rp->p_pri = pri;
+	if(pri > 0) {
+		if(issig()) {
+			rp->p_wchan = 0;
+			rp->p_stat = SRUN;
+			spl0();
 			goto psig;
-		spl6();
-		rp->p_wchan = chan;
-		rp->p_stat = SWAIT;
-		rp->p_pri = pri;
+		}
 		spl0();
 		if(runin != 0) {
 			runin = 0;
@@ -44,10 +51,6 @@ sleep(chan, pri)
 		if(issig())
 			goto psig;
 	} else {
-		spl6();
-		rp->p_wchan = chan;
-		rp->p_stat = SSLEEP;
-		rp->p_pri = pri;
 		spl0();
 		swtch();
 	}
@@ -55,7 +58,7 @@ sleep(chan, pri)
 	return;
 
 	/*
-	 * If priority was low (>=0) and
+	 * If priority was low (>0) and
 	 * there has been a signal,
 	 * execute non-local goto to
 	 * the qsav location.
@@ -77,11 +80,29 @@ wakeup(chan)
 	p = &proc[0];
 	i = NPROC;
 	do {
-		if(p->p_wchan == c) {
+		if(p->p_wchan==c && p->p_stat!=SZOMB)
 			setrun(p);
-		}
 		p++;
 	} while(--i);
+}
+
+setrq(p)
+struct proc *p;
+{
+	register struct proc *q;
+	register s;
+
+	s = PS->integ;
+	spl6();
+	for(q=runq; q!=NULL; q=q->p_link)
+		if(q == p) {
+			printf("proc on q\n");
+			goto out;
+		}
+	p->p_link = runq;
+	runq = p;
+out:
+	PS->integ = s;
 }
 
 /*
@@ -93,8 +114,11 @@ setrun(p)
 	register struct proc *rp;
 
 	rp = p;
+	if (rp->p_stat==0 || rp->p_stat==SZOMB)
+		panic("Running a dead proc");
 	rp->p_wchan = 0;
 	rp->p_stat = SRUN;
+	setrq(p);
 	if(rp->p_pri < curpri)
 		runrun++;
 	if(runout != 0 && (rp->p_flag&SLOAD) == 0) {
@@ -106,7 +130,7 @@ setrun(p)
 /*
  * Set user priority.
  * The rescheduling flag (runrun)
- * is set if the priority is higher
+ * is set if the priority is better
  * than the currently running process.
  */
 setpri(up)
@@ -118,9 +142,10 @@ setpri(up)
 	p =+ PUSER + pp->p_nice;
 	if(p > 127)
 		p = 127;
-	if(p > curpri)
+	if(p < curpri)
 		runrun++;
 	pp->p_pri = p;
+	return(p);
 }
 
 /*
@@ -131,128 +156,142 @@ setpri(up)
  *  swap out processes until there is room;
  *  swap him in;
  *  repeat.
- * Although it is not remarkably evident, the basic
- * synchronization here is on the runin flag, which is
- * slept on and is set once per second by the clock routine.
- * Core shuffling therefore takes place once per second.
+ * The runout flag is set whenever someone is swapped out.
+ * Sched sleeps on it awaiting work.
  *
- * panic: swap error -- IO error while swapping.
- *	this is the one panic that should be
- *	handled in a less drastic way. Its
- *	very hard.
+ * Sched sleeps on runin whenever it cannot find enough
+ * core (by swapping out or otherwise) to fit the
+ * selected swapped process.  It is awakend when the
+ * core situation changes and in any event once per second.
  */
 sched()
 {
-	struct proc *p1;
-	register struct proc *rp;
-	register a, n;
+	register struct proc *rp, *p;
+	register outage, inage;
+	int maxsize;
 
 	/*
-	 * find user to swap in
+	 * find user to swap in;
 	 * of users ready, select one out longest
 	 */
 
-	goto loop;
-
-sloop:
-	runin++;
-	sleep(&runin, PSWP);
-
 loop:
 	spl6();
-	n = -1;
-	for(rp = &proc[0]; rp < &proc[NPROC]; rp++)
-	if(rp->p_stat==SRUN && (rp->p_flag&SLOAD)==0 &&
-	    rp->p_time > n) {
-		p1 = rp;
-		n = rp->p_time;
+	outage = -20000;
+	for (rp = &proc[0]; rp < &proc[NPROC]; rp++)
+	if (rp->p_stat==SRUN && (rp->p_flag&SLOAD)==0 &&
+	    rp->p_time-rp->p_nice*8 > outage) {
+		p = rp;
+		outage = rp->p_time-rp->p_nice*8;
 	}
-	if(n == -1) {
+	/*
+	 * If there is no one there, wait.
+	 */
+	if (outage == -20000) {
 		runout++;
 		sleep(&runout, PSWP);
 		goto loop;
 	}
+	spl0();
 
 	/*
-	 * see if there is core for that process
+	 * See if there is core for that process;
+	 * if so, swap it in.
 	 */
 
-	spl0();
-	rp = p1;
-	a = rp->p_size;
-	if((rp=rp->p_textp) != NULL)
-		if(rp->x_ccount == 0)
-			a =+ rp->x_size;
-	if((a=malloc(coremap, a)) != NULL)
-		goto found2;
+	if (swapin(p))
+		goto loop;
 
 	/*
-	 * none found,
-	 * look around for easy core
+	 * none found.
+	 * look around for core.
+	 * Select the largest of those sleeping
+	 * at bad priority; if none, select the oldest.
 	 */
 
 	spl6();
-	for(rp = &proc[0]; rp < &proc[NPROC]; rp++)
-	if((rp->p_flag&(SSYS|SLOCK|SLOAD))==SLOAD &&
-	    (rp->p_stat == SWAIT || rp->p_stat==SSTOP))
-		goto found1;
-
-	/*
-	 * no easy core,
-	 * if this process is deserving,
-	 * look around for
-	 * oldest process in core
-	 */
-
-	if(n < 3)
-		goto sloop;
-	n = -1;
-	for(rp = &proc[0]; rp < &proc[NPROC]; rp++)
-	if((rp->p_flag&(SSYS|SLOCK|SLOAD))==SLOAD &&
-	   (rp->p_stat==SRUN || rp->p_stat==SSLEEP) &&
-	    rp->p_time > n) {
-		p1 = rp;
-		n = rp->p_time;
-	}
-	if(n < 2)
-		goto sloop;
-	rp = p1;
-
-	/*
-	 * swap user out
-	 */
-
-found1:
-	spl0();
-	rp->p_flag =& ~SLOAD;
-	xswap(rp, 1, 0);
-	goto loop;
-
-	/*
-	 * swap user in
-	 */
-
-found2:
-	if((rp=p1->p_textp) != NULL) {
-		if(rp->x_ccount == 0) {
-			if(swap(rp->x_daddr, a, rp->x_size, B_READ))
-				goto swaper;
-			rp->x_caddr = a;
-			a =+ rp->x_size;
+	p = NULL;
+	maxsize = -1;
+	inage = -1;
+	for (rp = &proc[0]; rp < &proc[NPROC]; rp++) {
+		if ((rp->p_flag&(SSYS|SLOCK|SLOAD))!=SLOAD)
+			continue;
+		if (rp->p_textp && rp->p_textp->x_flag&XLOCK)
+			continue;
+		if (rp->p_stat==SSLEEP&&rp->p_pri>=0 || rp->p_stat==SSTOP) {
+			if (maxsize < rp->p_size) {
+				p = rp;
+				maxsize = rp->p_size;
+			}
+		} else if (maxsize<0 && (rp->p_stat==SRUN||rp->p_stat==SSLEEP)) {
+			if (rp->p_time+rp->p_nice > inage) {
+				p = rp;
+				inage = rp->p_time+rp->p_nice;
+			}
 		}
-		rp->x_ccount++;
 	}
-	rp = p1;
-	if(swap(rp->p_addr, a, rp->p_size, B_READ))
-		goto swaper;
-	mfree(swapmap, (rp->p_size+7)/8, rp->p_addr);
-	rp->p_addr = a;
-	rp->p_flag =| SLOAD;
-	rp->p_time = 0;
+	spl0();
+	/*
+	 * Swap found user out if sleeping at bad pri,
+	 * or if he has spent at least 2 seconds in core and
+	 * the swapped-out process has spent at least 3 seconds out.
+	 * Otherwise wait a bit and try again.
+	 */
+	if (maxsize>=0 || (outage>=3 && inage>=2)) {
+		p->p_flag =& ~SLOAD;
+		xswap(p, 1, 0);
+		goto loop;
+	}
+	spl6();
+	runin++;
+	sleep(&runin, PSWP);
 	goto loop;
+}
 
-swaper:
-	panic("swap error");
+/*
+ * Swap a process in.
+ * Allocate data and possible text separately.
+ * It would be better to do largest first.
+ */
+swapin(pp)
+struct proc *pp;
+{
+	register struct proc *p;
+	register struct text *xp;
+	register int a;
+	int x;
+
+	p = pp;
+	if ((a = malloc(coremap, p->p_size)) == NULL)
+		return(0);
+	if (xp = p->p_textp) {
+		xlock(xp);
+		if (xp->x_ccount==0) {
+			if ((x = malloc(coremap, xp->x_size)) == NULL) {
+				xunlock(xp);
+				mfree(coremap, p->p_size, a);
+				return(0);
+			}
+			xp->x_caddr = x;
+			if ((xp->x_flag&XLOAD)==0)
+				swap(xp->x_daddr,x,xp->x_size,B_READ);
+		}
+		xp->x_ccount++;
+		xunlock(xp);
+	}
+	swap(p->p_addr, a, p->p_size, B_READ);
+	mfree(swapmap, ctob(p->p_size), p->p_addr);
+	p->p_addr = a;
+	p->p_flag =| SLOAD;
+	p->p_time = 0;
+	return(1);
+}
+
+qswtch()
+{
+
+	setrq(u.u_procp);
+	swtch();
 }
 
 /*
@@ -263,56 +302,56 @@ swaper:
  */
 swtch()
 {
-	static struct proc *p;
-	register i, n;
-	register struct proc *rp;
+	register n;
+	register struct proc *p, *q;
+	static struct proc *pp, *pq;
 
-	if(p == NULL)
-		p = &proc[0];
 	/*
 	 * Remember stack of caller
+	 * and switch to schedulers stack.
 	 */
 	savu(u.u_rsav);
-	/*
-	 * Switch to scheduler's stack
-	 */
 	retu(proc[0].p_addr);
 
 loop:
+	spl6();
 	runrun = 0;
-	rp = p;
-	p = NULL;
+	pp = NULL;
+	q = NULL;
 	n = 128;
 	/*
 	 * Search for highest-priority runnable process
 	 */
-	i = NPROC;
-	do {
-		rp++;
-		if(rp >= &proc[NPROC])
-			rp = &proc[0];
-		if(rp->p_stat==SRUN && (rp->p_flag&SLOAD)!=0) {
-			if(rp->p_pri < n) {
-				p = rp;
-				n = rp->p_pri;
+	for(p=runq; p!=NULL; p=p->p_link) {
+		if((p->p_stat==SRUN) && (p->p_flag&SLOAD)) {
+			if(p->p_pri < n) {
+				pp = p;
+				pq = q;
+				n = p->p_pri;
 			}
 		}
-	} while(--i);
+		q = p;
+	}
 	/*
 	 * If no process is runnable, idle.
 	 */
+	p = pp;
 	if(p == NULL) {
-		p = rp;
 		idle();
+		spl0();
 		goto loop;
 	}
-	rp = p;
+	q = pq;
+	if(q == NULL)
+		runq = p->p_link; else
+		q->p_link = p->p_link;
 	curpri = n;
+	spl0();
 	/*
 	 * Switch to stack of the new process and set up
 	 * his segmentation registers.
 	 */
-	retu(rp->p_addr);
+	retu(p->p_addr);
 	sureg();
 	/*
 	 * If the new process paused because it was
@@ -321,11 +360,9 @@ loop:
 	 * which is executed immediately after the call to aretu
 	 * actually returns from the last routine which did
 	 * the savu.
-	 *
-	 * You are not expected to understand this.
 	 */
-	if(rp->p_flag&SSWAP) {
-		rp->p_flag =& ~SSWAP;
+	if(p->p_flag&SSWAP) {
+		p->p_flag =& ~SSWAP;
 		aretu(u.u_ssav);
 	}
 	/*
@@ -384,14 +421,16 @@ retry:
 	rip = u.u_procp;
 	up = rip;
 	rpp->p_stat = SRUN;
+	rpp->p_clktim = 0;
 	rpp->p_flag = SLOAD;
 	rpp->p_uid = rip->p_uid;
-	rpp->p_ttyp = rip->p_ttyp;
+	rpp->p_pgrp = rip->p_pgrp;
 	rpp->p_nice = rip->p_nice;
 	rpp->p_textp = rip->p_textp;
 	rpp->p_pid = mpid;
 	rpp->p_ppid = rip->p_pid;
 	rpp->p_time = 0;
+	rpp->p_cpu = 0;
 
 	/*
 	 * make duplicate entries
@@ -440,6 +479,7 @@ retry:
 			copyseg(a1++, a2++);
 	}
 	u.u_procp = rip;
+	setrq(rpp);
 	return(0);
 }
 
@@ -478,7 +518,7 @@ expand(newsize)
 		savu(u.u_ssav);
 		xswap(p, 1, n);
 		p->p_flag =| SSWAP;
-		swtch();
+		qswtch();
 		/* no return */
 	}
 	p->p_addr = a2;

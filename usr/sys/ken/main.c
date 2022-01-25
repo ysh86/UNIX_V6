@@ -1,10 +1,14 @@
 #
 #include "../param.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../systm.h"
 #include "../proc.h"
+#include "../procx.h"
 #include "../text.h"
+#include "../textx.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../seg.h"
 
 #define	CLOCK1	0177546
@@ -48,14 +52,12 @@ int	icode[]
  */
 main()
 {
-	extern schar;
-	register i, *p;
+	register i;
 
 	/*
 	 * zero and free all of core
 	 */
 
-	updlock = 0;
 	i = *ka6 + USIZE;
 	UISD->r[0] = 077406;
 	for(;;) {
@@ -120,7 +122,7 @@ main()
 
 	if(newproc()) {
 		expand(USIZE+1);
-		estabur(0, 1, 0, 0);
+		estabur(0, 1, 0, 0, RO);
 		copyout(icode, 0, sizeof icode);
 		/*
 		 * Return goes to loc. 0 of user init
@@ -139,29 +141,21 @@ main()
  */
 sureg()
 {
-	register *up, *rp, a;
+	register *udp, *uap, *rdp;
+	int *rap, daddr, taddr, *limudp;
 
-	a = u.u_procp->p_addr;
-	up = &u.u_uisa[16];
-	rp = &UISA->r[16];
-	if(cputype == 40) {
-		up =- 8;
-		rp =- 8;
-	}
-	while(rp > &UISA->r[0])
-		*--rp = *--up + a;
-	if((up=u.u_procp->p_textp) != NULL)
-		a =- up->x_caddr;
-	up = &u.u_uisd[16];
-	rp = &UISD->r[16];
-	if(cputype == 40) {
-		up =- 8;
-		rp =- 8;
-	}
-	while(rp > &UISD->r[0]) {
-		*--rp = *--up;
-		if((*rp & WO) == 0)
-			rp[(UISA-UISD)/2] =- a;
+	taddr = daddr = u.u_procp->p_addr;
+	if (udp=u.u_procp->p_textp)
+		taddr = udp->x_caddr;
+	limudp = &u.u_uisd[16];
+	if (cputype==40)
+		limudp = &u.u_uisd[8];
+	rap = UISA;
+	rdp = UISD;
+	uap = &u.u_uisa[0];
+	for (udp = &u.u_uisd[0]; udp < limudp;) {
+		*rap++ = *uap++ + (*udp&TX? taddr: daddr);
+		*rdp++ = *udp++;
 	}
 }
 
@@ -173,18 +167,20 @@ sureg()
  * The argument sep specifies if the
  * text and data+stack segments are to
  * be separated.
+ * The last argument determines whether the text
+ * segment is read-write or read-only.
  */
-estabur(nt, nd, ns, sep)
+estabur(nt, nd, ns, sep, xrw)
 {
 	register a, *ap, *dp;
 
 	if(sep) {
 		if(cputype == 40)
 			goto err;
-		if(nseg(nt) > 8 || nseg(nd)+nseg(ns) > 8)
+		if(ctos(nt) > 8 || ctos(nd)+ctos(ns) > 8)
 			goto err;
 	} else
-		if(nseg(nt)+nseg(nd)+nseg(ns) > 8)
+		if(ctos(nt)+ctos(nd)+ctos(ns) > 8)
 			goto err;
 	if(nt+nd+ns+USIZE > maxmem)
 		goto err;
@@ -192,13 +188,13 @@ estabur(nt, nd, ns, sep)
 	ap = &u.u_uisa[0];
 	dp = &u.u_uisd[0];
 	while(nt >= 128) {
-		*dp++ = (127<<8) | RO;
+		*dp++ = (127<<8) | xrw|TX;
 		*ap++ = a;
 		a =+ 128;
 		nt =- 128;
 	}
 	if(nt) {
-		*dp++ = ((nt-1)<<8) | RO;
+		*dp++ = ((nt-1)<<8) | xrw|TX;
 		*ap++ = a;
 	}
 	if(sep)
@@ -254,13 +250,4 @@ estabur(nt, nd, ns, sep)
 err:
 	u.u_error = ENOMEM;
 	return(-1);
-}
-
-/*
- * Return the arg/128 rounded up.
- */
-nseg(n)
-{
-
-	return((n+127)>>7);
 }

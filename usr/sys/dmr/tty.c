@@ -8,12 +8,20 @@
 #include "../param.h"
 #include "../systm.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../tty.h"
 #include "../proc.h"
+#include "../procx.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../file.h"
+#include "../filex.h"
 #include "../reg.h"
 #include "../conf.h"
+
+char	partab[];
+
+#define	DLDELAY	4	/* Extra delay for DL's (double buff) */
 
 /*
  * Input mapping table-- if an entry is non-zero, when the
@@ -23,15 +31,15 @@
  */
 char	maptab[]
 {
-	000,000,000,000,004,000,000,000,
+	000,000,000,000,CEOT,00,000,000,
 	000,000,000,000,000,000,000,000,
 	000,000,000,000,000,000,000,000,
 	000,000,000,000,000,000,000,000,
-	000,'|',000,'#',000,000,000,'`',
+	000,'|',000,000,000,000,000,'`',
 	'{','}',000,000,000,000,000,000,
 	000,000,000,000,000,000,000,000,
 	000,000,000,000,000,000,000,000,
-	'@',000,000,000,000,000,000,000,
+	000,000,000,000,000,000,000,000,
 	000,000,000,000,000,000,000,000,
 	000,000,000,000,000,000,000,000,
 	000,000,000,000,000,000,'~',000,
@@ -69,6 +77,29 @@ struct {
 };
 
 /*
+ * routine called on first teletype open.
+ * establishes a process group for distribution
+ * of quits and interrupts from the tty.
+ */
+ttyopen(dev, atp)
+struct tty *atp;
+{
+	register struct proc *pp;
+	register struct tty *tp;
+
+	pp = u.u_procp;
+	tp = atp;
+	if(pp->p_pgrp == 0) {
+		pp->p_pgrp = pp->p_pid;
+		u.u_ttyp = tp;
+		u.u_ttyd = dev;
+		tp->t_pgrp = pp->p_pid;
+	}
+	tp->t_state =& ~WOPEN;
+	tp->t_state =| ISOPEN;
+}
+
+/*
  * The routine implementing the gtty system call.
  * Just call lower level routine and pass back values.
  */
@@ -96,6 +127,7 @@ stty()
 	register int *up;
 
 	up = u.u_arg[0];
+	u.u_arg[3] = up;
 	u.u_arg[0] = fuword(up);
 	u.u_arg[1] = fuword(++up);
 	u.u_arg[2] = fuword(++up);
@@ -199,10 +231,12 @@ struct tty *atp;
 	char *bp1;
 	register struct tty *tp;
 	register int c;
+	int mc;
 
 	tp = atp;
 	spl5();
-	while (tp->t_delct==0) {
+	while ((tp->t_flags&RAW)==0 && tp->t_delct==0
+	    || (tp->t_flags&RAW)!=0 && tp->t_rawq.c_cc==0) {
 		if ((tp->t_state&CARR_ON)==0)
 			return(0);
 		sleep(&tp->t_rawq, TTIPRI);
@@ -211,11 +245,11 @@ struct tty *atp;
 loop:
 	bp = &canonb[2];
 	while ((c=getc(&tp->t_rawq)) >= 0) {
-		if (c==0377) {
-			tp->t_delct--;
-			break;
-		}
 		if ((tp->t_flags&RAW)==0) {
+			if (c==0377) {
+				tp->t_delct--;
+				break;
+			}
 			if (bp[-1]!='\\') {
 				if (c==tp->t_erase) {
 					if (bp > &canonb[2])
@@ -226,11 +260,15 @@ loop:
 					goto loop;
 				if (c==CEOT)
 					continue;
-			} else
-			if (maptab[c] && (maptab[c]==c || (tp->t_flags&LCASE))) {
-				if (bp[-2] != '\\')
-					c = maptab[c];
-				bp--;
+			} else {
+				mc = maptab[c];
+				if (c==tp->t_erase || c==tp->t_kill)
+					mc = c;
+				if (mc && (mc==c || (tp->t_flags&LCASE))) {
+					if (bp[-2] != '\\')
+						c = mc;
+					bp--;
+				}
 			}
 		}
 		*bp++ = c;
@@ -258,30 +296,36 @@ struct tty *atp;
 	register int t_flags, c;
 	register struct tty *tp;
 
+	tk_nin =+ 1;
 	tp = atp;
-	c = ac;
+	c = ac&0377;
 	t_flags = tp->t_flags;
-	if ((c =& 0177) == '\r' && t_flags&CRMOD)
-		c = '\n';
-	if ((t_flags&RAW)==0 && (c==CQUIT || c==CINTR)) {
-		signal(tp, c==CINTR? SIGINT:SIGQIT);
-		flushtty(tp);
-		return;
+	if ((t_flags&RAW)==0) {
+		c =& 0177;
+		if (c==CQUIT || c==CINTR) {
+			signal(tp->t_pgrp, c==CINTR? SIGINT:SIGQIT);
+			flushtty(tp);
+			return;
+		}
+		if (c=='\r' && t_flags&CRMOD)
+			c = '\n';
 	}
-	if (tp->t_rawq.c_cc>=TTYHOG) {
+	if (tp->t_rawq.c_cc>TTYHOG) {
 		flushtty(tp);
 		return;
 	}
 	if (t_flags&LCASE && c>='A' && c<='Z')
 		c =+ 'a'-'A';
 	putc(c, &tp->t_rawq);
-	if (t_flags&RAW || c=='\n' || c==004) {
+	if (t_flags&RAW || (c=='\n' || c==CEOT)) {
 		wakeup(&tp->t_rawq);
-		if (putc(0377, &tp->t_rawq)==0)
+		if ((t_flags&RAW)==0 && putc(0377, &tp->t_rawq)==0)
 			tp->t_delct++;
 	}
 	if (t_flags&ECHO) {
 		ttyoutput(c, tp);
+		if (c==tp->t_kill && (t_flags&RAW)==0)
+			ttyoutput('\n', tp);
 		ttstart(tp);
 	}
 }
@@ -301,14 +345,23 @@ struct tty *tp;
 	register char *colp;
 	int ctype;
 
+	tk_nout =+ 1;
 	rtp = tp;
-	c = ac&0177;
+	c = ac;
 	/*
 	 * Ignore EOT in normal mode to avoid hanging up
 	 * certain terminals.
+	 * In raw mode dump the char unchanged.
 	 */
-	if (c==004 && (rtp->t_flags&RAW)==0)
+
+	if ((rtp->t_flags&RAW)==0) {
+		c =& 0177;
+		if (c==CEOT)
+			return;
+	} else {
+		putc(c, &rtp->t_outq);
 		return;
+	}
 	/*
 	 * Turn tabs to spaces as required
 	 */
@@ -338,15 +391,14 @@ struct tty *tp;
 	 */
 	if (c=='\n' && rtp->t_flags&CRMOD)
 		ttyoutput('\r', rtp);
-	if (putc(c, &rtp->t_outq))
-		return;
+	putc(c, &rtp->t_outq);
 	/*
 	 * Calculate delays.
 	 * The numbers here represent clock ticks
 	 * and are not necessarily optimal for all terminals.
-	 * The delays are indicated by characters above 0200,
-	 * thus (unfortunately) restricting the transmission
-	 * path to 7 bits.
+	 * The delays are indicated by characters above 0200.
+	 * In raw mode there are no delays and the
+	 * transmission path is 8 bits wide.
 	 */
 	colp = &rtp->t_col;
 	ctype = partab[c];
@@ -442,6 +494,7 @@ ttstart(atp)
 struct tty *atp;
 {
 	register int *addr, c;
+	int sps;
 	register struct tty *tp;
 	struct { int (*func)(); };
 
@@ -451,16 +504,21 @@ struct tty *atp;
 		(*addr.func)(tp);
 		return;
 	}
+	sps = PS->integ;
+	spl5();
 	if ((addr->tttcsr&DONE)==0 || tp->t_state&TIMEOUT)
 		return;
 	if ((c=getc(&tp->t_outq)) >= 0) {
-		if (c<=0177)
+		if (tp->t_flags&RAW)
+			addr->tttbuf = c;
+		else if (c<=0177)
 			addr->tttbuf = c | (partab[c]&0200);
 		else {
-			timeout(ttrstrt, tp, c&0177);
+			timeout(ttrstrt, tp, (c&0177) + DLDELAY);
 			tp->t_state =| TIMEOUT;
 		}
 	}
+	PS->integ = sps;
 }
 
 /*

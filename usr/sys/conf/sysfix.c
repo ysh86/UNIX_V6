@@ -8,8 +8,11 @@
 int	tbuf[259];
 int	rbuf[259];
 int	obuf[259];
+long	itol();
 int	txtsiz;
+long	ltxtsiz;
 int	datsiz;
+long	ldatsiz;
 int	bsssiz;
 int	symsiz;
 
@@ -41,7 +44,9 @@ char **argv;
 	}
 	putw(0407, obuf);
 	txtsiz = getw(tbuf);
+	ltxtsiz = itol(0, txtsiz);
 	datsiz = getw(tbuf);
+	ldatsiz = itol(0, datsiz);
 	bsssiz = getw(tbuf);
 	symsiz = getw(tbuf);
 	getw(tbuf);
@@ -62,11 +67,9 @@ char **argv;
  *  Copy out data first
  */
 	tbuf[1] = 0;
-	seek(tbuf[0], 020+txtsiz, 0);
-	seek(rbuf[0], 020+txtsiz, 0);
-	seek(rbuf[0], txtsiz, 1);
-	seek(rbuf[0], datsiz, 1);
-	s = datsiz >> 1;
+	lseek(tbuf[0], 020+ltxtsiz, 0);
+	lseek(rbuf[0], 020+ltxtsiz+ltxtsiz+ldatsiz, 0);
+	s = (datsiz >> 1) & 077777;
 	while (s--) {
 		word = getw(tbuf);
 		rel = getw(rbuf);
@@ -80,10 +83,9 @@ char **argv;
  */
 	rbuf[1] = 0;
 	tbuf[1] = 0;
-	seek(rbuf[0], 020+txtsiz, 0);
-	seek(rbuf[0], datsiz, 1);
+	lseek(rbuf[0], 020+ltxtsiz+ldatsiz, 0);
 	seek(tbuf[0], 020, 0);
-	s = txtsiz >> 1;
+	s = (txtsiz >> 1) & 077777;
 	while(s--) {
 		rel = getw(rbuf);
 		word = getw(tbuf);
@@ -96,10 +98,7 @@ char **argv;
  * The symbol table.
  */
 	tbuf[1] = 0;
-	seek(tbuf[0], 020+txtsiz, 0);
-	seek(tbuf[0], txtsiz, 1);
-	seek(tbuf[0], datsiz, 1);
-	seek(tbuf[0], datsiz, 1);
+	lseek(tbuf[0], 020+ltxtsiz+ltxtsiz+ldatsiz+ldatsiz, 0);
 	s = symsiz;
 	while ((s =- 12) >= 0) {
 		putw(getw(tbuf), obuf);

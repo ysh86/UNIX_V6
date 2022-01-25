@@ -16,7 +16,7 @@ struct user
 	int	u_rsav[2];		/* save r5,r6 when exchanging stacks */
 	int	u_fsav[25];		/* save fp registers */
 					/* rsav and fsav must be first in structure */
-	char	u_segflg;		/* flag for IO; user or kernel space */
+	char	u_segflg;		/* IO flag: 0:user D; 1:system; 2:user I */
 	char	u_error;		/* return error code */
 	char	u_uid;			/* effective user id */
 	char	u_gid;			/* effective group id */
@@ -45,21 +45,33 @@ struct user
 	int	u_qsav[2];		/* label variable for quits and interrupts */
 	int	u_ssav[2];		/* label variable for swapping */
 	int	u_signal[NSIG];		/* disposition of signals */
-	int	u_utime;		/* this process user time */
-	int	u_stime;		/* this process system time */
-	int	u_cutime[2];		/* sum of childs' utimes */
-	int	u_cstime[2];		/* sum of childs' stimes */
+	long	u_utime;		/* this process user time */
+	long	u_stime;		/* this process system time */
+	long	u_cutime;		/* sum of childs' utimes */
+	long	u_cstime;		/* sum of childs' stimes */
 	int	*u_ar0;			/* address of users saved R0 */
 	int	u_prof[4];		/* profile arguments */
 	char	u_intflg;		/* catch intr from sys */
+	int	u_ttyp;			/* controlling tty pointer */
+	int	u_ttyd;			/* controlling tty dev */
+	struct {			/* header of executable file */
+		int	ux_mag;		/* magic number */
+		int	ux_tsize;	/* text size */
+		int	ux_dsize;	/* data size */
+		int	ux_bsize;	/* bss size */
+		int	ux_ssize;	/* symbol table size */
+		int	ux_entloc;	/* entry location */
+	} u_exdata;
+	char	u_comm[DIRSIZ];
+	long	u_start;
+	char	u_acflag;
 					/* kernel stack per user
 					 * extends from u + USIZE*64
 					 * backward not to reach here
 					 */
-} u;
+};
 
 /* u_error codes */
-#define	EFAULT	106
 #define	EPERM	1
 #define	ENOENT	2
 #define	ESRCH	3
@@ -73,6 +85,7 @@ struct user
 #define	EAGAIN	11
 #define	ENOMEM	12
 #define	EACCES	13
+#define	EFAULT	14
 #define	ENOTBLK	15
 #define	EBUSY	16
 #define	EEXIST	17

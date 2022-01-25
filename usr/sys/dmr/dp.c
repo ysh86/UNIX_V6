@@ -15,7 +15,9 @@
 #include "../param.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../buf.h"
+#include "../bufx.h"
 
 /* control info */
 struct {
@@ -124,6 +126,7 @@ dpread()
 		sleep(&dp11, DPPRI);
 		spl0();
 	}
+	u.u_offset[1] = 0;
 	iomove(dp11.dp_buf, 0, min(u.u_count, *epp-bp), B_READ);
 }
 
@@ -144,6 +147,7 @@ dpwrite()
 	if (u.u_count>512)
 		u.u_count = 512;
 	dp11.dp_nxmit = u.u_count;
+	u.u_offset[1] = 0;
 	iomove(dp11.dp_buf, 0, u.u_count, B_WRITE);
 	dpstart();
 }

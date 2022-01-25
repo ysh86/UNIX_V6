@@ -13,8 +13,8 @@
 #include "../param.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../tty.h"
-#include "../proc.h"
 
 #define	DHADDR	0160020
 #define	NDH11	16	/* number of lines */
@@ -50,6 +50,15 @@ int	ndh11	NDH11;
 #define	SSPEED	7	/* standard speed: 300 baud */
 
 /*
+ * DM control bits
+ */
+#define	TURNON	03	/* CD lead + line enable */
+#define	TURNOFF	01	/* line enable */
+#define	RQS	04	/* request to send */
+
+#define	XCLUDE	0200	/* exclusive-use flag against open */
+
+/*
  * Software copy of last dhbar
  */
 int	dhsar;
@@ -79,21 +88,20 @@ dhopen(dev, flag)
 	}
 	tp = &dh11[dev.d_minor];
 	tp->t_addr = dhstart;
-	tp->t_dev = dev;
-	DHADDR->dhcsr =| IENABLE;
 	tp->t_state =| WOPEN|SSTART;
+	DHADDR->dhcsr =| IENABLE;
 	if ((tp->t_state&ISOPEN) == 0) {
 		tp->t_erase = CERASE;
 		tp->t_kill = CKILL;
 		tp->t_speeds = SSPEED | (SSPEED<<8);
 		tp->t_flags = ODDP|EVENP|ECHO;
-		dhparam(tp);
+		dhparam(dev);
+	} else if (tp->t_state&XCLUDE && u.u_uid!=0) {
+		u.u_error = EBUSY;
+		return;
 	}
 	dmopen(dev);
-	tp->t_state =& ~WOPEN;
-	tp->t_state =| ISOPEN;
-	if (u.u_procp->p_ttyp == 0)
-		u.u_procp->p_ttyp = tp;
+	ttyopen(dev, tp);
 }
 
 /*
@@ -104,7 +112,8 @@ dhclose(dev)
 	register struct tty *tp;
 
 	tp = &dh11[dev.d_minor];
-	dmclose(dev);
+	if (tp->t_flags&HUPCL)
+		dmctl(dev, TURNOFF);
 	tp->t_state =& (CARR_ON|SSTART);
 	wflushtty(tp);
 }
@@ -137,10 +146,14 @@ dhrint()
 		tp = &dh11[(c>>8)&017];
 		if (tp >= &dh11[NDH11])
 			continue;
-		if((tp->t_state&ISOPEN)==0 || (c&PERROR)) {
+		if((tp->t_state&ISOPEN)==0) {
 			wakeup(tp);
 			continue;
 		}
+		if (c&PERROR)
+			if ((tp->t_flags&(EVENP|ODDP))==EVENP
+			 || (tp->t_flags&(EVENP|ODDP))==ODDP )
+				continue;
 		if (c&FRERROR)		/* break */
 			if (tp->t_flags&RAW)
 				c = 0;		/* null (for getty) */
@@ -157,43 +170,89 @@ dhsgtty(dev, av)
 int *av;
 {
 	register struct tty *tp;
-	register r;
+	register int *mod;
 
 	tp = &dh11[dev.d_minor];
+	/*
+	 * Special weirdness.
+	 * On stty, if the input speed is 15 (EXT B)
+	 * then the output speed selects a special function.
+	 * The stored modes are not affected.
+	 */
+	if (av==0 && (mod=u.u_arg)[0].lobyte==15) {
+		switch (mod[0].hibyte) {
+
+		/*
+		 * Set break
+		 */
+		case 1:
+			DHADDR->dhbreak =| 1<<dev.d_minor;
+			return;
+
+		/*
+		 * Clear break
+		 */
+		case 2:
+			DHADDR->dhbreak =& ~(1<<dev.d_minor);
+			return;
+
+		/*
+		 * Turn on request to send
+		 */
+		case 3:
+			dmctl(dev, TURNON|RQS);
+			return;
+
+		/*
+		 * Turn off request to send
+		 */
+		case 4:
+			dmctl(dev, TURNON);
+			return;
+
+		/*
+		 * Prevent opens on channel
+		 */
+		case 5:
+			tp->t_state =| XCLUDE;
+			return;
+		}
+		return;
+	}
 	if (ttystty(tp, av))
 		return;
-	dhparam(tp);
+	dhparam(dev);
 }
 
 /*
  * Set parameters from open or stty into the DH hardware
  * registers.
  */
-dhparam(atp)
-struct tty *atp;
+dhparam(dev)
 {
 	register struct tty *tp;
 	register int lpr;
 
-	tp = atp;
+	tp = &dh11[dev.d_minor];
 	spl5();
-	DHADDR->dhcsr.lobyte = tp->t_dev.d_minor | IENABLE;
+	DHADDR->dhcsr.lobyte = dev.d_minor | IENABLE;
 	/*
 	 * Hang up line?
 	 */
 	if (tp->t_speeds.lobyte==0) {
 		tp->t_flags =| HUPCL;
-		dmclose(tp->t_dev);
+		dmctl(dev, TURNOFF);
 		return;
 	}
 	lpr = (tp->t_speeds.hibyte<<10) | (tp->t_speeds.lobyte<<6);
 	if (tp->t_speeds.lobyte == 4)		/* 134.5 baud */
-		lpr =| BITS6|PENABLE|HDUPLX; else
-		if (tp->t_flags&EVENP)
-			if (tp->t_flags&ODDP)
-				lpr =| BITS8; else
-				lpr =| BITS7|PENABLE; else
-			lpr =| BITS7|OPAR|PENABLE;
+		lpr =| BITS6|PENABLE|HDUPLX;
+	else if (tp->t_flags&RAW)
+		lpr =| BITS8;
+	else
+		lpr =| BITS7|PENABLE;
+	if ((tp->t_flags&EVENP)==0)
+		lpr =| OPAR;
 	if (tp->t_speeds.lobyte == 3)	/* 110 baud */
 		lpr =| TWOSB;
 	DHADDR->dhlpr = lpr;
@@ -233,12 +292,13 @@ struct tty *atp;
 	extern ttrstrt();
 	register c, nch;
 	register struct tty *tp;
-	int sps;
+	int sps, dev;
 	char *cp;
 
 	sps = PS->integ;
 	spl5();
 	tp = atp;
+	dev = tp-dh11;
 	/*
 	 * If it's currently active, or delaying,
 	 * no need to do anything.
@@ -256,14 +316,14 @@ struct tty *atp;
 		tp->t_state =| TIMEOUT;
 		goto out;
 	}
-	cp = dh_clist[tp->t_dev.d_minor];
+	cp = dh_clist[dev.d_minor];
 	nch = 0;
 	/*
 	 * Copy DHNCH characters, or up to a delay indicator,
 	 * to the DMA area.
 	 */
 	while (nch > -DHNCH && (c = getc(&tp->t_outq))>=0) {
-		if (c >= 0200) {
+		if (c >= 0200 && (tp->t_flags&RAW)==0) {
 			tp->t_char = c;
 			break;
 		}
@@ -283,10 +343,10 @@ struct tty *atp;
 	 * otherwise, check for possible delay.
 	 */
 	if (nch) {
-		DHADDR->dhcsr.lobyte = tp->t_dev.d_minor | IENABLE;
+		DHADDR->dhcsr.lobyte = dev.d_minor | IENABLE;
 		DHADDR->dhcar = cp+nch;
 		DHADDR->dhbcr = nch;
-		c = 1<<tp->t_dev.d_minor;
+		c = 1<<dev.d_minor;
 		DHADDR->dhbar =| c;
 		dhsar =| c;
 		tp->t_state =| BUSY;

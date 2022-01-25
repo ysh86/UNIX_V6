@@ -8,8 +8,10 @@
 
 #include "../param.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 
 struct {
 	int	htcs1;

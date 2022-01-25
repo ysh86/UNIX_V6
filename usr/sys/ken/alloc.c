@@ -1,14 +1,14 @@
 #
-/*
- */
-
 #include "../param.h"
 #include "../systm.h"
 #include "../filsys.h"
 #include "../conf.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../user.h"
+#include "../userx.h"
 
 /*
  * iinit is called once (from main)
@@ -37,8 +37,10 @@ iinit()
 	cp->s_flock = 0;
 	cp->s_ilock = 0;
 	cp->s_ronly = 0;
-	time[0] = cp->s_time[0];
-	time[1] = cp->s_time[1];
+	time = cp->s_time;
+/*
+	ssort(cp->s_free+1, cp->s_nfree-1);
+*/
 }
 
 /*
@@ -74,6 +76,9 @@ alloc(dev)
 		fp->s_nfree = *ip++;
 		bcopy(ip, fp->s_free, 100);
 		brelse(bp);
+/*
+		ssort(fp->s_free+1, fp->s_nfree-1);
+*/
 		fp->s_flock = 0;
 		wakeup(&fp->s_flock);
 	}
@@ -145,6 +150,65 @@ badblock(afp, abn, dev)
 	}
 	return(0);
 }
+
+/*
+ * Shell sort used to
+ * sort the free list to permute
+ * each 24 block to be approx
+ * interleaved by 3.
+ *
+
+int	ssar[]
+{
+	0,  8, 16,
+	1,  9, 17,
+	2, 10, 18,
+	3, 11, 19,
+	4, 12, 20,
+	5, 13, 21,
+	6, 14, 22,
+	7, 15, 23,
+};
+
+ssort(v, n)
+int v[];
+{
+	register gap, j, jg;
+	int i, k;
+
+	for(gap=n/2; gap>0; gap=/2)
+	for(i=gap; i<n; i++)
+	for(j=i-gap; j>=0; j =- gap) {
+		jg = j+gap;
+		if(sscmp(v, j, jg))
+			break;
+		k = v[j];
+		v[j] = v[jg];
+		v[jg] = k;
+	}
+}
+
+sscmp(v, i, j)
+int v[];
+{
+	register char *a, *b;
+
+	a = ssmap(v[i]);
+	b = ssmap(v[j]);
+	if(a >= b)
+		return(1);
+	return(0);
+}
+
+ssmap(n)
+{
+	register b, o;
+
+	b = ldiv(n, 24);
+	o = lrem(n, 24);
+	return(b*24 + ssar[o]);
+}
+*/
 
 /*
  * Allocate an unused I node
@@ -296,18 +360,21 @@ update()
 			if(ip->s_fmod==0 || ip->s_ilock!=0 ||
 			   ip->s_flock!=0 || ip->s_ronly!=0)
 				continue;
+/*
+			ssort(ip->s_free+1, ip->s_nfree-1);
+*/
 			bp = getblk(mp->m_dev, 1);
 			ip->s_fmod = 0;
-			ip->s_time[0] = time[0];
-			ip->s_time[1] = time[1];
+			ip->s_time = time;
 			bcopy(ip, bp->b_addr, 256);
 			bwrite(bp);
 		}
 	for(ip = &inode[0]; ip < &inode[NINODE]; ip++)
-		if((ip->i_flag&ILOCK) == 0) {
+		if((ip->i_flag&ILOCK)==0 && ip->i_count) {
 			ip->i_flag =| ILOCK;
-			iupdat(ip, time);
-			prele(ip);
+			ip->i_count++;
+			iupdat(ip);
+			iput(ip);
 		}
 	updlock = 0;
 	bflush(NODEV);

@@ -15,7 +15,8 @@
 #define	CLSEND	02
 #define	RQSEND	01
 
-#define	MAGIC_MAP 0377
+#define	GO	026
+#define	COUNT	120
 
 struct {
 	int	vsrcsr;
@@ -26,19 +27,24 @@ struct {
 
 struct {
 	struct	clist	iq;
+	int	vtime;
 	struct	clist	oq;
 } vs;
 
+
 vsopen(dev)
 {
+	register c;
+
+	c = VSADDR->vsrcsr;
 	VSADDR->vsrcsr = IENABLE|B1200|CDLEAD;
 	VSADDR->vsxcsr = STOP1|IENABLE|B1200;
-	vschar(0);
+	vschar(GO);
 }
 
 vsclose(dev)
 {
-	vschar(0);
+	vschar(GO);
 	VSADDR->vsrcsr =& ~IENABLE;
 	while (getc(&vs.iq) >= 0);
 }
@@ -50,26 +56,31 @@ vswrite(dev)
 	count = 0;
 	while ((c=cpass()) >= 0) {
 		if (--count <= 0) {
-			count = 60;
-			vschar(0);
+			count = COUNT;
+			vschar(GO);
 		}
 		vschar(c);
 	}
-	vschar(0);
+	vschar(GO);
 }
 
 vschar(c)
 {
 
-	c =^ MAGIC_MAP;
 	spl5();
-	while (vs.oq.c_cc > 60) {
+	while (vs.oq.c_cc > 120) {
 		vsxintr();
 		sleep(&vs.oq, TTIPRI);
 	}
 	putc(c, &vs.oq);
 	vsxintr();
 	spl0();
+}
+
+vstimo()
+{
+	vs.vtime = 0;
+	vsxintr();
 }
 
 vsxintr()
@@ -80,22 +91,29 @@ vsxintr()
 
 	xcsr = &VSADDR->vsxcsr;
 	if (*xcsr&DONE) {
-		if (lchar==MAGIC_MAP) {
+		if (lchar==GO) {
 			*xcsr =& ~RQSEND;
-			lchar = 0;
-			if (vs.oq.c_cc==0)
-				goto wake;
+			lchar = -1;
+			if (vs.oq.c_cc==0) {
+				wakeup(&vs.oq);
+				return;
+			}
 		}
 		if ((*xcsr&CLSEND) == 0) {
-			*xcsr =& ~RQSEND;
 			*xcsr =| RQSEND;
-			if ((*xcsr&CLSEND) == 0)
-				goto wake;
+			if ((*xcsr&CLSEND) == 0) {
+				if (vs.vtime==0) {
+					vs.vtime++;
+					timeout(vstimo, 0, 60);
+				}
+				return;
+			}
 		}
 		if ((c = getc(&vs.oq)) >= 0)
 			VSADDR->vsxbuf = lchar = c;
+		else
+			*xcsr =& ~RQSEND;
 		if (vs.oq.c_cc <= 15)
-	    wake:
 			wakeup(&vs.oq);
 	}
 }
@@ -115,6 +133,7 @@ vsrintr()
 {
 	register int c;
 
+	c = VSADDR->vsrbuf;	/* Register must be read (?) */
 	c = VSADDR->vsrbuf;
 	if (vs.iq.c_cc<=10)
 		putc(c, &vs.iq);

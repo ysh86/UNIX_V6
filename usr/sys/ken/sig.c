@@ -1,18 +1,21 @@
 #
-/*
- */
-
 #include "../param.h"
 #include "../systm.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../proc.h"
+#include "../procx.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../reg.h"
+#include "../text.h"
+#include "../textx.h"
+#include "../seg.h"
 
 /*
  * Priority for tracing
  */
-#define	IPCPRI	(-1)
+#define	IPCPRI	0
 
 /*
  * Structure to access an array of integers.
@@ -40,17 +43,20 @@ struct
 
 /*
  * Send the specified signal to
- * all processes with 'tp' as its
- * controlling teletype.
+ * all processes with 'pgrp' as
+ * process group.
  * Called by tty.c for quits and
  * interrupts.
  */
-signal(tp, sig)
+signal(apgrp, sig)
 {
 	register struct proc *p;
+	register pgrp;
 
+	if ((pgrp = apgrp)==0)
+		return;
 	for(p = &proc[0]; p < &proc[NPROC]; p++)
-		if(p->p_ttyp == tp)
+		if(p->p_pgrp == pgrp)
 			psignal(p, sig);
 }
 
@@ -60,17 +66,19 @@ signal(tp, sig)
  */
 psignal(p, sig)
 int *p;
+char *sig;
 {
-	register *rp;
+	register *rp, a;
 
-	if(sig >= NSIG)
+	a = sig;
+	if(a >= NSIG)
 		return;
 	rp = p;
-	if(rp->p_sig != SIGKIL)
-		rp->p_sig = sig;
-	if(rp->p_stat > PUSER)
-		rp->p_stat = PUSER;
-	if(rp->p_stat == SWAIT)
+	if(a)
+		rp->p_sig =| 1<<(a-1);
+	if(rp->p_pri > PUSER)
+		rp->p_pri = PUSER;
+	if(rp->p_stat == SSLEEP && rp->p_pri > 0)
 		setrun(rp);
 }
 
@@ -91,14 +99,11 @@ issig()
 	register struct proc *p;
 
 	p = u.u_procp;
-	if(n = p->p_sig) {
-		if (p->p_flag&STRC) {
-			stop();
-			if ((n = p->p_sig) == 0)
-				return(0);
-		}
-		if((u.u_signal[n]&1) == 0)
+	while(p->p_sig) {
+		n = fsig(p);
+		if((u.u_signal[n]&1) == 0 || (p->p_flag&STRC))
 			return(n);
+		p->p_sig =& ~(1<<(n-1));
 	}
 	return(0);
 }
@@ -141,8 +146,12 @@ psig()
 	register *rp;
 
 	rp = u.u_procp;
-	n = rp->p_sig;
-	rp->p_sig = 0;
+	if (rp->p_flag&STRC)
+		stop();
+	n = fsig(rp);
+	if (n==0)
+		return;
+	rp->p_sig =& ~(1<<(n-1));
 	if((p=u.u_signal[n]) != 0) {
 		u.u_error = 0;
 		if(n != SIGINS && n != SIGTRC)
@@ -176,6 +185,25 @@ psig()
 }
 
 /*
+ * find the signal in bit-position
+ * representation in p_sig.
+ */
+fsig(p)
+struct proc *p;
+{
+	register n, i;
+	register char *cp;
+
+	n = p->p_sig;
+	for(i=1; i<NSIG; i++) {
+		if(n & 1)
+			return(i);
+		n =>> 1;
+	}
+	return(0);
+}
+
+/*
  * Create a core image on the file "core"
  * If you are looking for protection glitches,
  * there are probably a wealth of them here
@@ -183,6 +211,7 @@ psig()
  *
  * It writes USIZE block of the
  * user.h area followed by the entire
+#include "../userx.h"
  * data+stack segments.
  */
 core()
@@ -197,7 +226,7 @@ core()
 		if(u.u_error)
 			return(0);
 		ip = maknode(0666);
-		if(ip == NULL)
+		if (ip==NULL)
 			return(0);
 	}
 	if(!access(ip, IWRITE) &&
@@ -211,7 +240,7 @@ core()
 		u.u_segflg = 1;
 		writei(ip);
 		s = u.u_procp->p_size - USIZE;
-		estabur(0, s, 0, 0);
+		estabur(0, s, 0, 0, RO);
 		u.u_base = 0;
 		u.u_count = s*64;
 		u.u_segflg = 0;
@@ -236,7 +265,7 @@ char *sp;
 	si = ldiv(-sp, 64) - u.u_ssize + SINCR;
 	if(si <= 0)
 		return(0);
-	if(estabur(u.u_tsize, u.u_dsize, u.u_ssize+si, u.u_sep))
+	if(estabur(u.u_tsize, u.u_dsize, u.u_ssize+si, u.u_sep, RO))
 		return(0);
 	expand(u.u_procp->p_size+si);
 	a = u.u_procp->p_addr + u.u_procp->p_size;
@@ -256,6 +285,7 @@ char *sp;
 ptrace()
 {
 	register struct proc *p;
+	register struct text *xp;
 
 	if (u.u_arg[2] <= 0) {
 		u.u_procp->p_flag =| STRC;
@@ -296,6 +326,7 @@ procxmt()
 {
 	register int i;
 	register int *p;
+	register struct text *xp;
 
 	if (ipc.ip_lock != u.u_procp->p_pid)
 		return(0);
@@ -326,11 +357,25 @@ procxmt()
 		ipc.ip_data = u.inta[i>>1];
 		break;
 
-	/* write user I (for now, always an error) */
+	/* write user I */
+	/* Must set up to allow writing */
 	case 4:
-		if (suiword(ipc.ip_addr, 0) < 0)
-			goto error;
+		/*
+		 * If text, must assure exclusive use
+		 */
+		if (xp = u.u_procp->p_textp) {
+			if (xp->x_count!=1 || xp->x_iptr->i_mode&ISVTX)
+				goto error;
+			xp->x_iptr->i_flag =& ~ITEXT;
+		}
+		estabur(u.u_tsize, u.u_dsize, u.u_ssize, u.u_sep, RW);
+		i = suiword(ipc.ip_addr, 0);
 		suiword(ipc.ip_addr, ipc.ip_data);
+		estabur(u.u_tsize, u.u_dsize, u.u_ssize, u.u_sep, RO);
+		if (i<0)
+			goto error;
+		if (xp)
+			xp->x_flag =| XWRIT;
 		break;
 
 	/* write user D */
@@ -359,7 +404,8 @@ procxmt()
 
 	/* set signal and continue */
 	case 7:
-		u.u_procp->p_sig = ipc.ip_data;
+		u.u_procp->p_sig = 0;
+		psignal(u.u_procp, ipc.ip_data);
 		return(1);
 
 	/* force exit */

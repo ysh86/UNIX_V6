@@ -2,10 +2,13 @@
 #include "../param.h"
 #include "../systm.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../filsys.h"
 #include "../conf.h"
 #include "../buf.h"
+#include "../bufx.h"
 
 /*
  * Look up an inode by device,inumber.
@@ -101,9 +104,10 @@ struct inode *p;
 		if(rp->i_nlink <= 0) {
 			itrunc(rp);
 			rp->i_mode = 0;
+			rp->i_flag =| IUPD;
 			ifree(rp->i_dev, rp->i_number);
 		}
-		iupdat(rp, time);
+		iupdat(rp);
 		prele(rp);
 		rp->i_flag = 0;
 		rp->i_number = 0;
@@ -116,12 +120,10 @@ struct inode *p;
  * Check accessed and update flags on
  * an inode structure.
  * If either is on, update the inode
- * with the corresponding dates
- * set to the argument tm.
+ * with the current time.
  */
-iupdat(p, tm)
+iupdat(p)
 int *p;
-int *tm;
 {
 	register *ip1, *ip2, *rp;
 	int *bp, i;
@@ -137,15 +139,16 @@ int *tm;
 		while(ip2 < &rp->i_addr[8])
 			*ip1++ = *ip2++;
 		if(rp->i_flag&IACC) {
-			*ip1++ = time[0];
-			*ip1++ = time[1];
+			*ip1++ = time.hiword;
+			*ip1++ = time.loword;
 		} else
 			ip1 =+ 2;
 		if(rp->i_flag&IUPD) {
-			*ip1++ = *tm++;
-			*ip1++ = *tm;
+			*ip1++ = time.hiword;
+			*ip1++ = time.loword;
 		}
-		bwrite(bp);
+		rp->i_flag =& ~(IUPD|IACC);
+		bdwrite(bp);
 	}
 }
 
@@ -171,11 +174,11 @@ int *ip;
 	if(*ip) {
 		if((rp->i_mode&ILARG) != 0) {
 			bp = bread(rp->i_dev, *ip);
-			for(cp = bp->b_addr+512; cp >= bp->b_addr; cp--)
+			for(cp = bp->b_addr+510; cp >= bp->b_addr; cp--)
 			if(*cp) {
 				if(ip == &rp->i_addr[7]) {
 					dp = bread(rp->i_dev, *cp);
-					for(ep = dp->b_addr+512; ep >= dp->b_addr; ep--)
+					for(ep = dp->b_addr+510; ep >= dp->b_addr; ep--)
 					if(*ep)
 						free(rp->i_dev, *ep);
 					brelse(dp);
@@ -201,8 +204,10 @@ maknode(mode)
 	register *ip;
 
 	ip = ialloc(u.u_pdir->i_dev);
-	if (ip==NULL)
+	if (ip==NULL) {
+		iput(u.u_pdir);
 		return(NULL);
+	}
 	ip->i_flag =| IACC|IUPD;
 	ip->i_mode = mode|IALLOC;
 	ip->i_nlink = 1;

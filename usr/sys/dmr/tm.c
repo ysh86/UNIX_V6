@@ -8,8 +8,10 @@
 
 #include "../param.h"
 #include "../buf.h"
+#include "../bufx.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 
 struct {
 	int tmer;
@@ -89,6 +91,8 @@ struct buf *abp;
 	register char **p;
 
 	bp = abp;
+	if(bp->b_flags&B_PHYS)
+		mapalloc(bp);
 	p = &t_nxrec[bp->b_dev.d_minor];
 	if (*p <= bp->b_blkno) {
 		if (*p < bp->b_blkno) {
@@ -168,7 +172,7 @@ tmintr()
 	unit = bp->b_dev.d_minor;
 	if (TMADDR->tmcs < 0) {		/* error bit */
 /*
-		deverror(bp, TMADDR->tmer);
+		deverror(bp, TMADDR->tmer, 0);
  */
 		while(TMADDR->tmrd & GAPSD) ; /* wait for gap shutdown */
 		if ((TMADDR->tmer&(HARD|EOF))==0 && tmtab.d_active==SIO) {
@@ -179,7 +183,7 @@ tmintr()
 				return;
 			}
 		} else
-			if(bp != &rtmbuf && (TMADDR->tmer&EOF)==0)
+			if(t_openf[unit]>0 && bp!=&rtmbuf && (TMADDR->tmer&EOF)==0)
 				t_openf[unit] = -1;
 		bp->b_flags =| B_ERROR;
 		tmtab.d_active = SIO;

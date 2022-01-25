@@ -1,9 +1,12 @@
 #
 #include "../param.h"
 #include "../inode.h"
+#include "../inodex.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../systm.h"
 #include "../buf.h"
+#include "../bufx.h"
 
 /*
  * Convert a pathname into a pointer to

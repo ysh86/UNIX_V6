@@ -2,9 +2,12 @@
 #include "../param.h"
 #include "../systm.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../reg.h"
 #include "../file.h"
+#include "../filex.h"
 #include "../inode.h"
+#include "../inodex.h"
 
 /*
  * read system call
@@ -29,7 +32,7 @@ write()
  */
 rdwr(mode)
 {
-	register *fp, m;
+	register *fp, *ip, m;
 
 	m = mode;
 	fp = getf(u.u_ar0[R0]);
@@ -47,11 +50,16 @@ rdwr(mode)
 			readp(fp); else
 			writep(fp);
 	} else {
+		ip = fp->f_inode;
 		u.u_offset[1] = fp->f_offset[1];
 		u.u_offset[0] = fp->f_offset[0];
+		if((ip->i_mode&(IFCHR&IFBLK)) == 0)
+			plock(ip);
 		if(m==FREAD)
-			readi(fp->f_inode); else
-			writei(fp->f_inode);
+			readi(ip); else
+			writei(ip);
+		if((ip->i_mode&(IFCHR&IFBLK)) == 0)
+			prele(ip);
 		dpadd(fp->f_offset, u.u_arg[1]-u.u_count);
 	}
 	u.u_ar0[R0] = u.u_arg[1]-u.u_count;
@@ -117,7 +125,7 @@ int *ip;
 	}
 	if(u.u_error)
 		goto out;
-	if(trf)
+	if(trf == 1)
 		itrunc(rip);
 	prele(rip);
 	if ((fp = falloc()) == NULL)
@@ -192,8 +200,25 @@ seek()
 	case 3:
 		;
 	}
-	fp->f_offset[1] = n[1];
-	fp->f_offset[0] = n[0];
+	if (n[0] & ~0777)
+		u.u_error = EFBIG;
+	else {
+		fp->f_offset[1] = n[1];
+		fp->f_offset[0] = n[0];
+	}
+}
+
+/*
+ * Tell -- discover offset of file R/W pointer
+ */
+tell()
+{
+	register struct file *fp;
+
+	if (fp = getf(u.u_ar0[R0])) {
+		u.u_ar0[R0] = fp->f_offset[0];
+		u.u_ar0[R1] = fp->f_offset[1];
+	}
 }
 
 /*
@@ -214,9 +239,14 @@ link()
 	if((ip->i_mode&IFMT)==IFDIR && !suser())
 		goto out;
 	/*
-	 * unlock to avoid possibly hanging the namei
+	 * Unlock to avoid possibly hanging the namei.
+	 * Sadly, this means races. (Suppose someone
+	 * deletes the file in the meantime?)
+	 * Nor can it be locked again later
+	 * because then there will be deadly
+	 * embraces.
 	 */
-	ip->i_flag =& ~ILOCK;
+	prele(ip);
 	u.u_dirp = u.u_arg[1];
 	xp = namei(&uchar, 1);
 	if(xp != NULL) {
@@ -270,20 +300,41 @@ out:
  */
 sslep()
 {
-	char *d[2];
+	long d;
 
 	spl7();
-	d[0] = time[0];
-	d[1] = time[1];
-	dpadd(d, u.u_ar0[R0]);
-
-	while(dpcmp(d[0], d[1], time[0], time[1]) > 0) {
-		if(dpcmp(tout[0], tout[1], time[0], time[1]) <= 0 ||
-		   dpcmp(tout[0], tout[1], d[0], d[1]) > 0) {
-			tout[0] = d[0];
-			tout[1] = d[1];
-		}
-		sleep(tout, PSLEP);
+	d = time + u.u_ar0[R0];
+	while (time < d) {
+		if (tout<=time || d<tout)
+			tout = d;
+		sleep(&tout, PSLEP);
 	}
 	spl0();
+}
+
+/*
+ * access system call
+ */
+saccess()
+{
+	extern uchar;
+	register svuid, svgid;
+	register *ip;
+
+	svuid = u.u_uid;
+	svgid = u.u_gid;
+	u.u_uid = u.u_ruid;
+	u.u_gid = u.u_rgid;
+	ip = namei(&uchar, 0);
+	if (ip != NULL) {
+		if (u.u_arg[1]&(IREAD>>6))
+			access(ip, IREAD);
+		if (u.u_arg[1]&(IWRITE>>6))
+			access(ip, IWRITE);
+		if (u.u_arg[1]&(IEXEC>>6))
+			access(ip, IEXEC);
+		iput(ip);
+	}
+	u.u_uid = svuid;
+	u.u_gid = svgid;
 }

@@ -11,6 +11,7 @@
 
 #include "../param.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../conf.h"
 #include "../seg.h"
 
@@ -31,7 +32,8 @@ mmread(dev)
 		UISD->r[0] = 077406;
 		if(dev.d_minor == 1)
 			UISA->r[0] = (ka6-6)->r[(bn>>7)&07] + (bn & 0177);
-		c = fuibyte(on);
+		if ((c = fuibyte(on)) < 0)
+			u.u_error = ENXIO;
 		UISA->r[0] = a;
 		UISD->r[0] = d;
 		spl0();
@@ -62,7 +64,8 @@ mmwrite(dev)
 		UISD->r[0] = 077406;
 		if(dev.d_minor == 1)
 			UISA->r[0] = (ka6-6)->r[(bn>>7)&07] + (bn & 0177);
-		suibyte(on, c);
+		if (suibyte(on, c) < 0)
+			u.u_error = ENXIO;
 		UISA->r[0] = a;
 		UISD->r[0] = d;
 		spl0();

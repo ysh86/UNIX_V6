@@ -8,19 +8,19 @@
 #include "../param.h"
 #include "../conf.h"
 #include "../user.h"
+#include "../userx.h"
 #include "../tty.h"
-#include "../proc.h"
 
 /*
  * Base address of DC-11's. Minor device  i  is at
  * DCADDR + 10*i.
  */
-#define	DCADDR	0174000
+#define	DCADDR	0174140	/* Std is 174000 */
 
 /*
  * Number of DC's for which table space is allocated.
  */
-#define	NDC11	14
+#define	NDC11	1
 
 /*
  * Control bits in device registers
@@ -102,34 +102,30 @@ int dctstab[] {
  */
 dcopen(dev, flag)
 {
-	register struct tty *rtp;
+	register struct tty *tp;
 	register *addr;
 
 	if (dev.d_minor >= NDC11) {
 		u.u_error = ENXIO;
 		return;
 	}
-	rtp = &dc11[dev.d_minor];
-	rtp->t_addr = addr = DCADDR + dev.d_minor*8;
-	rtp->t_state =| WOPEN;
+	tp = &dc11[dev.d_minor];
+	tp->t_addr = addr = DCADDR + dev.d_minor*8;
+	tp->t_state =| WOPEN;
 	addr->dcrcsr =| IENABLE|CDLEAD;
-	if ((rtp->t_state&ISOPEN) == 0) {
-		rtp->t_erase = CERASE;
-		rtp->t_kill = CKILL;
+	if ((tp->t_state&ISOPEN) == 0) {
+		tp->t_erase = CERASE;
+		tp->t_kill = CKILL;
 		addr->dcrcsr = IENABLE|CDLEAD|SPEED1;
 		addr->dctcsr = IENABLE|SPEED1|STOP1|RQSEND;
-		rtp->t_state = ISOPEN | WOPEN;
-		rtp->t_flags = ODDP|EVENP|ECHO;
+		tp->t_state = ISOPEN | WOPEN;
+		tp->t_flags = ODDP|EVENP|ECHO;
 	}
 	if (addr->dcrcsr & CARRIER)
-		rtp->t_state =| CARR_ON;
-	while ((rtp->t_state & CARR_ON) == 0)
-		sleep(&rtp->t_rawq, TTIPRI);
-	rtp->t_state =& ~WOPEN;
-	if (u.u_procp->p_ttyp == 0) {
-		u.u_procp->p_ttyp = rtp;
-		rtp->t_dev = dev;
-	}
+		tp->t_state =| CARR_ON;
+	while ((tp->t_state & CARR_ON) == 0)
+		sleep(&tp->t_rawq, TTIPRI);
+	ttyopen(dev, tp);
 }
 
 /*
@@ -192,7 +188,7 @@ dcrint(dev)
 		if ((tp->t_state&WOPEN) == 0) {
 			tp->t_addr->dcrcsr =& ~CDLEAD;
 			if (tp->t_state & CARR_ON)
-				signal(tp, SIGHUP);
+				signal(tp->t_pgrp, SIGHUP);
 			flushtty(tp);
 		}
 		tp->t_state =& ~CARR_ON;
@@ -205,7 +201,7 @@ dcrint(dev)
 		return;
 	}
 	csr =& PARITY;
-	if (csr&&(tp->t_flags&ODDP) || !csr&&(tp->t_flags&EVENP))
+	if (tp->t_flags&RAW || csr&&(tp->t_flags&ODDP) || !csr&&(tp->t_flags&EVENP))
 		ttyinput(c, tp);
 }
 
