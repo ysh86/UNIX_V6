@@ -20,18 +20,18 @@
  */
 struct buf
 {
-	int	b_flags;		/* see defines below */
+	short	b_flags;		/* see defines below */
 	struct	buf *b_forw;		/* headed by devtab of b_dev */
 	struct	buf *b_back;		/*  "  */
 	struct	buf *av_forw;		/* position on free list, */
 	struct	buf *av_back;		/*     if not BUSY*/
-	int	b_dev;			/* major+minor device name */
-	int	b_wcount;		/* transfer count (usu. words) */
-	char	*b_addr;		/* low order core address */
-	char	*b_xmem;		/* high order core address */
-	char	*b_blkno;		/* block # on device */
+	short	b_dev;			/* major+minor device name */
+	short	b_wcount;		/* transfer count (usu. words) */
+	void	*b_addr;		/* low order core address */
+	unsigned short b_xmem;		/* high order core address */
+	unsigned short b_blkno;		/* block # on device */
 	char	b_error;		/* returned after I/O */
-	char	*b_resid;		/* words not transferred after error */
+	unsigned short b_resid;		/* words not transferred after error */
 };
 
 /*
