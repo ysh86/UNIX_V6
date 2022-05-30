@@ -5,7 +5,7 @@
  */
 char	canonb[CANBSIZ];	/* buffer for erase and kill (#@) */
 struct map {
-	int	m_size;
+	short	m_size;
 	char	*m_addr;
 };
 struct map coremap[CMAPSIZ];	/* space for core allocation */
@@ -16,7 +16,7 @@ int	cputype;		/* type of cpu =40, 45, or 70 */
 int	lbolt;			/* time of day in 60th not in time */
 long	time;			/* time in sec from 1970 */
 long	tout;			/* time of day of next sleep */
-int	*acctp;			/* inode of accounting file */
+struct inode *acctp;		/* inode of accounting file */
 struct {
 	char	ac_comm[DIRSIZ];	/* Accounting command name */
 	long	ac_utime;		/* Accounting user time */
@@ -48,9 +48,9 @@ struct	callo
  */
 struct	mount
 {
-	int	m_dev;		/* device mounted */
-	int	*m_bufp;	/* pointer to superblock */
-	int	*m_inodp;	/* pointer to mounted on inode */
+	short	m_dev;		/* device mounted */
+	struct buf *m_bufp;	/* pointer to superblock */
+	struct inode *m_inodp;	/* pointer to mounted on inode */
 } mount[NMOUNT];
 
 /*
@@ -67,7 +67,7 @@ int	nblkdev;
  * Number of character switch entries.
  * Set by cinit/tty.c
  */
-int	nchrdev;
+short	nchrdev;
 
 int	mpid;			/* generic for unique process id's */
 char	runin;			/* scheduling flag */
@@ -82,7 +82,7 @@ int	swplo;			/* block number of swap space */
 int	nswap;			/* size of swap space */
 int	updlock;		/* lock for sync */
 int	rablock;		/* block to be read ahead */
-char	regloc[];		/* locs. of saved user registers (trap.c) */
+char	*regloc;		/* locs. of saved user registers (trap.c) */
 char	msgbuf[MSGBUFS];	/* saved "printf" characters */
 /*
  * Instrumentation

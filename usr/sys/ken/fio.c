@@ -1,4 +1,3 @@
-#
 #include "../param.h"
 #include "../user.h"
 #include "../userx.h"
@@ -11,6 +10,8 @@
 #include "../reg.h"
 #include "../systm.h"
 
+#include "../declarations.h"
+
 /*
  * Convert a user supplied
  * file descriptor into a pointer
@@ -18,9 +19,10 @@
  * Only task is to check range
  * of the descriptor.
  */
-getf(f)
+struct file *getf(short f)
 {
-	register *fp, rf;
+	register struct file *fp;
+	register short rf;
 
 	rf = f;
 	if (0<=rf && rf<NOFILE) {
@@ -45,19 +47,18 @@ getf(f)
  * special files.  Note that the handler is called
  * on every open but only the last close.
  */
-closef(fp)
-int *fp;
+void closef(struct file *fp)
 {
-	register *ip;
+	register struct inode *ip;
 	register struct file *rfp;
-	int flag;
+	char flag;
 	register int (*cfunc)();
 
 	if ((rfp = fp) == NULL)
 		return;
 	ip = rfp->f_inode;
 	if(rfp->f_flag&FPIPE) {
-		ip->i_mode =& ~(IREAD|IWRITE);
+		ip->i_mode &= ~(IREAD|IWRITE);
 		wakeup(ip+1);
 		wakeup(ip+2);
 	}
@@ -66,9 +67,9 @@ int *fp;
 	plock(ip);
 	iput(ip);
 	if ((ip->i_mode&IFMT) == IFCHR)
-		cfunc = cdevsw[ip->i_addr[0].d_major].d_close;
+		cfunc = cdevsw[GET_D_MAJOR(ip->i_addr[0])].d_close;
 	else if ((ip->i_mode&IFMT)== IFBLK)
-		cfunc = bdevsw[ip->i_addr[0].d_major].d_close;
+		cfunc = bdevsw[GET_D_MAJOR(ip->i_addr[0])].d_close;
 	else
 		return;
 	flag = rfp->f_flag&FWRITE;
@@ -85,15 +86,14 @@ int *fp;
  * Called on all sorts of opens
  * and also on mount.
  */
-openi(ip, rw)
-int *ip;
+void openi(struct inode *ip, short rw)
 {
-	register *rip;
-	register dev, maj;
+	register struct inode *rip;
+	register short dev, maj;
 
 	rip = ip;
 	dev = rip->i_addr[0];
-	maj = rip->i_addr[0].d_major & 0377;
+	maj = GET_D_MAJOR(rip->i_addr[0]) & 0377;
 	switch(rip->i_mode&IFMT) {
 
 	case IFCHR:
@@ -126,10 +126,10 @@ bad:
  * The super user is granted all
  * permissions.
  */
-access(aip, mode)
-int *aip;
+short access(struct inode *aip, short mode)
 {
-	register *ip, m;
+	register struct inode *ip;
+	register short m;
 
 	ip = aip;
 	m = mode;
@@ -146,14 +146,14 @@ int *aip;
 	if(u.u_uid == 0)
 		return(0);
 	if(u.u_uid != ip->i_uid) {
-		m =>> 3;
+		m >>= 3;
 		if(u.u_gid != ip->i_gid)
-			m =>> 3;
+			m >>= 3;
 	}
 	if((ip->i_mode&m) != 0)
 		return(0);
 
-bad:
+/* bad: */
 	u.u_error = EACCES;
 	return(1);
 }
@@ -166,10 +166,9 @@ bad:
  * If permission is granted,
  * return inode pointer.
  */
-owner()
+struct inode *owner()
 {
 	register struct inode *ip;
-	extern uchar();
 
 	if ((ip = namei(uchar, 0)) == NULL)
 		return(NULL);
@@ -185,7 +184,7 @@ owner()
  * Test if the current user is the
  * super user.
  */
-suser()
+short suser()
 {
 
 	if(u.u_uid == 0)
@@ -197,9 +196,9 @@ suser()
 /*
  * Allocate a user file descriptor.
  */
-ufalloc()
+short ufalloc()
 {
-	register i;
+	register short i;
 
 	for (i=0; i<NOFILE; i++)
 		if (u.u_ofile[i] == NULL) {
@@ -219,10 +218,10 @@ ufalloc()
  * no file -- if there are no available
  * 	file structures.
  */
-falloc()
+struct file *falloc()
 {
 	register struct file *fp;
-	register i;
+	register short i;
 
 	if ((i = ufalloc()) < 0)
 		return(NULL);
@@ -234,7 +233,7 @@ falloc()
 			fp->f_offset[1] = 0;
 			return(fp);
 		}
-	printf("no file\n");
+	printf("no file\n",0,0,0,0,0,0,0,0,0,0,0,0);
 	u.u_error = ENFILE;
 	return(NULL);
 }

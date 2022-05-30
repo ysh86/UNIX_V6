@@ -78,27 +78,45 @@
  * structure to access an
  * integer in bytes
  */
+/*
 struct
 {
 	char	lobyte;
 	char	hibyte;
 };
+*/
+#define GET_LOBYTE(__data__) ( (__data__)    &0xff)
+#define GET_HIBYTE(__data__) (((__data__)>>8)&0xff)
+#define SET_LOBYTE(__dst__,__src__) ((__dst__) = ((__dst__)&0xff00) | ( (__src__)    &0x00ff))
+#define SET_HIBYTE(__dst__,__src__) ((__dst__) = ((__dst__)&0x00ff) | (((__src__)<<8)&0xff00))
 
 /*
  * structure to access an integer
  */
+/*
 struct
 {
-	int	integ;
+	short	integ;
 };
+*/
+#define GET_INTEG(__ptr__)         (*(short *)(__ptr__) & 0xffff)
+#define SET_INTEG(__prt__,__src__) (*(short *)(__ptr__) = (__src__))
+
 
 /*
  * structure to access a long as integers
  */
+/*
 struct {
-	int	hiword;
-	int	loword;
+	short	hiword;
+	short	loword;
 };
+*/
+#define GET_LOWORD(__data__) ((short)( (__data__)     &0xffff))
+#define GET_HIWORD(__data__) ((short)(((__data__)>>16)&0xffff))
+#define SET_LOWORD(__dst__,__src__) ((__dst__) = ((__dst__)&0xffff0000) | ( (__src__)     &0x0000ffff))
+#define SET_HIWORD(__dst__,__src__) ((__dst__) = ((__dst__)&0x0000ffff) | (((__src__)<<16)&0xffff0000))
+
 
 /*
  * Certain processor registers
