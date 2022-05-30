@@ -5,7 +5,7 @@
  */
 char	canonb[CANBSIZ];	/* buffer for erase and kill (#@) */
 struct map {
-	int	m_size;
+	short	m_size;
 	char	*m_addr;
 };
 struct map coremap[CMAPSIZ];	/* space for core allocation */

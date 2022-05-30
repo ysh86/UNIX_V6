@@ -113,8 +113,8 @@ unsigned int max(unsigned int a, unsigned int b);
 unsigned int min(unsigned int a, unsigned int b);
 
 /* ken/malloc.c */
-char *malloc(struct map *mp, int size);
-void mfree(struct map *mp, int size, char *aa);
+char *malloc(struct map *mp, short size);
+void mfree(struct map *mp, short size, char *aa);
 
 /* ken/main.c */
 int estabur(int nt, int nd, int ns, int sep);

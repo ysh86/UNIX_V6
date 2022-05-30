@@ -1,6 +1,8 @@
 #include "../param.h"
 #include "../systm.h"
 
+#include "../declarations.h"
+
 /*
  * Allocate 'size' units from the given
  * map. Return the base of the allocated
@@ -11,21 +13,20 @@
  * is 512 bytes.
  * Algorithm is first-fit.
  */
-malloc(mp, size)
-struct map *mp;
+char *malloc(struct map *mp, short size)
 {
-	register int a;
+	register char *a;
 	register struct map *bp;
 
 	for (bp=mp; bp->m_size; bp++) {
 		if (bp->m_size >= size) {
 			a = bp->m_addr;
-			bp->m_addr =+ size;
-			if ((bp->m_size =- size) == 0)
+			bp->m_addr += size;
+			if ((bp->m_size -= size) == 0)
 				do {
 					bp++;
 					(bp-1)->m_addr = bp->m_addr;
-				} while ((bp-1)->m_size = bp->m_size);
+				} while (((bp-1)->m_size = bp->m_size) != 0);
 			return(a);
 		}
 	}
@@ -38,13 +39,12 @@ struct map *mp;
  * Sort aa into map and combine on
  * one or both ends if possible.
  */
-mfree(mp, size, aa)
-struct map *mp;
-char *aa;
+void mfree(struct map *mp, short size, char *aa)
 {
 	register struct map *bp;
-	register int t;
+	register char *t;
 	register char *a;
+	register short s;
 
 	a = aa;
 	if ((bp = mp)==coremap && runin) {
@@ -53,9 +53,9 @@ char *aa;
 	}
 	for (; bp->m_addr<=a && bp->m_size!=0; bp++);
 	if (bp>mp && (bp-1)->m_addr+(bp-1)->m_size == a) {
-		(bp-1)->m_size =+ size;
+		(bp-1)->m_size += size;
 		if (a+size == bp->m_addr) {
-			(bp-1)->m_size =+ bp->m_size;
+			(bp-1)->m_size += bp->m_size;
 			while (bp->m_size) {
 				bp++;
 				(bp-1)->m_addr = bp->m_addr;
@@ -64,15 +64,15 @@ char *aa;
 		}
 	} else {
 		if (a+size == bp->m_addr && bp->m_size) {
-			bp->m_addr =- size;
-			bp->m_size =+ size;
+			bp->m_addr -= size;
+			bp->m_size += size;
 		} else if (size) do {
 			t = bp->m_addr;
 			bp->m_addr = a;
 			a = t;
-			t = bp->m_size;
+			s = bp->m_size;
 			bp->m_size = size;
 			bp++;
-		} while (size = t);
+		} while ((size = s) != 0);
 	}
 }
