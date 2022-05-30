@@ -51,6 +51,7 @@ void cinit();
 
 
 /* ken/alloc.c */
+struct filsys;
 void iinit();
 struct buf *alloc(short dev);
 void free(short dev, short bno);
@@ -72,7 +73,7 @@ int cpass();
 /* ken/slp.c */
 struct proc;
 void sleep(char *chan, char pri);
-void wakeup(char *chan);
+void wakeup(void *chan);
 void setpri(struct proc *up);
 int newproc();
 void expand(int newsize);
@@ -90,6 +91,7 @@ void itrunc(int *ip);
 void wdir(struct inode *ip);
 
 /* ken/pipe.c */
+void plock(struct inode *ip);
 void prele(struct inode *ip);
 
 /* ken/sig.c */
@@ -97,9 +99,8 @@ char issig();
 char psig();
 
 /* ken/fio.c */
-int access(struct inode *aip, int mode);
-void closei(struct inode *ip, char rw);
-int suser();
+short access(struct inode *aip, short mode);
+short suser();
 
 /* ken/nami.c */
 struct inode *namei(int (*func)(), int flag);

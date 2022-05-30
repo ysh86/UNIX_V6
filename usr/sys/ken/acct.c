@@ -4,13 +4,14 @@
 #include	"../userx.h"
 #include	"../inode.h"
 
+#include	"../declarations.h"
+
 /*
  * Perform process accounting functions.
  */
 
-sysacct()
+void sysacct(void)
 {
-	extern uchar();
 	register struct inode *ip;
 
 	if (suser()) {
@@ -41,10 +42,10 @@ sysacct()
 /*
  * On exit, write a record on the accounting file.
  */
-acct()
+void acct(void)
 {
 	register struct inode *ip;
-	register i, j;
+	register unsigned short i, j;
 
 	if ((ip=acctp)==NULL)
 		return;

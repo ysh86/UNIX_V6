@@ -30,7 +30,7 @@ struct	bdevsw
 	int	(*d_close)();
 	int	(*d_strategy)();
 	int	*d_tab;
-} bdevsw[];
+} *bdevsw;
 
 /*
  * Character device switch.
@@ -42,4 +42,4 @@ struct	cdevsw
 	int	(*d_read)();
 	int	(*d_write)();
 	int	(*d_sgtty)();
-} cdevsw[];
+} *cdevsw;
